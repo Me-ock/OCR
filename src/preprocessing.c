@@ -30,6 +30,8 @@ Image* to_grayscale(Image *src)
     return gray;
 }
 
+
+// permet le stockage  
 Image* to_binary(Image *src, unsigned char threshold) 
 {
     if (!src || !src->data) return NULL;
