@@ -1,7 +1,9 @@
 #include <stdlib.h>
 #include "preprocessing.h"
 
-Image* to_grayscale(Image *src) {
+// met en gris pour que ce soit plus simple, OCR pas besoin de couleur
+Image* to_grayscale(Image *src) 
+{
     if (!src || !src->data) return NULL;
 
     Image *gray = malloc(sizeof(Image));
@@ -9,7 +11,7 @@ Image* to_grayscale(Image *src) {
 
     gray->width = src->width;
     gray->height = src->height;
-    gray->channels = 1; // une seule couche
+    gray->channels = 1; // couche, besoin que d'1 seul
     gray->data = malloc(gray->width * gray->height);
     if (!gray->data) {
         free(gray);
@@ -26,5 +28,28 @@ Image* to_grayscale(Image *src) {
         }
     }
     return gray;
+}
+
+Image* to_binary(Image *src, unsigned char threshold) 
+{
+    if (!src || !src->data) return NULL;
+
+    Image *bin = malloc(sizeof(Image));
+    if (!bin) return NULL;
+
+    bin->width = src->width;
+    bin->height = src->height;
+    bin->channels = 1;  // noir et blanc
+    bin->data = malloc(bin->width * bin->height);
+    if (!bin->data) {
+        free(bin);
+        return NULL;
+    }
+
+    for (int i = 0; i < src->width * src->height; i++) {
+        bin->data[i] = (src->data[i] > threshold) ? 255 : 0;
+    }
+
+    return bin;
 }
 

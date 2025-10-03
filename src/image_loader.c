@@ -25,6 +25,8 @@ int save_image(const char *filename, Image *img) {
     if (!img || !img->data) return 0;
     return stbi_write_png(filename, img->width, img->height, img->channels, img->data, img->width * img->channels);
 }
+// les 2 sont assez evidents
+
 
 void free_image(Image *img) {
     if (img) {
@@ -32,4 +34,4 @@ void free_image(Image *img) {
         free(img);
     }
 }
-
+// libere la memoire quand plus besoin de l'image 

@@ -9,12 +9,16 @@ int main() {
     Image *gray = to_grayscale(img);
     if (!gray) return 1;
 
-    save_image("processed_images/output.png", gray);
+    Image *bin = to_binary(gray, 128);  // seuil = 128
+    if (!bin) return 1;
+
+    save_image("processed_images/output_binary.png", bin);
 
     free_image(img);
     free_image(gray);
+    free_image(bin);
 
-    printf("Image convertie et sauvegardée dans processed_images/output.png\n");
+    printf("Image convertie en noir et blanc et sauvegardée.\n");
     return 0;
 }
 

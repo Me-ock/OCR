@@ -4,7 +4,7 @@
 typedef struct {
     int width;
     int height;
-    int channels; // nb de canaux (ex : 3 = RGB)
+    int channels; // RGB 
     unsigned char *data;
 } Image;
 
