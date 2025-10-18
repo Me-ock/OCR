@@ -7,21 +7,33 @@ int main() {
     if (!img) return 1;
 
     Image *gray = to_grayscale(img);
-    Image *bin = to_binary(gray, 128);
+    Image *norm = normalize_contrast(gray);              // bonus
+    Image *bin  = to_binary(norm ? norm : gray, 128);
 
-    float angle;
-    printf("Entrez un angle de rotation (ex: 15 ou -10) : ");
-    scanf("%f", &angle);
+    // D: débruitage
+    Image *den  = denoise_image_median3x3(bin);
 
-    Image *rotated = rotate_image(bin, angle);
-    save_image("processed_images/output_rotated.png", rotated);
+    // C (déjà fait) : rotation manuelle possible ici si tu veux tester
+    // float angle = 10.0f; Image *rot = rotate_image(den ? den : bin, angle);
+
+    // Bonus : rotation auto
+    Image *rotA = auto_rotate(den ? den : bin, -8.0f, 8.0f, 0.5f);
+
+    save_image("processed_images/step_gray.png", gray);
+    if (norm) save_image("processed_images/step_norm.png", norm);
+    save_image("processed_images/step_bin.png",  bin);
+    if (den)  save_image("processed_images/step_denoise.png", den);
+    if (rotA) save_image("processed_images/step_autorot.png", rotA);
 
     free_image(img);
     free_image(gray);
+    if (norm) free_image(norm);
     free_image(bin);
-    free_image(rotated);
+    if (den)  free_image(den);
+    if (rotA) free_image(rotA);
 
-    printf("Image tournée sauvegardée sous processed_images/output_rotated.png\n");
+    puts("Prétraitement terminé. Résultats dans processed_images/.");
     return 0;
 }
+
 
