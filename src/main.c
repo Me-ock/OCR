@@ -53,8 +53,13 @@ int main(void)
         if (!gray)
             continue;
 
-        Image *bin = to_binary(gray, 128);
+        Image *deskew = straighten_grid(gray);
         free_image(gray);
+        if (!deskew)
+            continue;
+
+        Image *bin = to_binary(deskew, 128);
+        free_image(deskew);
         if (!bin)
             continue;
 
