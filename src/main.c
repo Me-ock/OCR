@@ -1,39 +1,67 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <dirent.h>
+
 #include "image_loader.h"
 #include "preprocessing.h"
 
-int main() {
-    Image *img = load_image("tests/test1.png");
-    if (!img) return 1;
+#define TESTS_DIR   "tests"
+#define OUTPUT_DIR  "processed_images"
 
-    Image *gray = to_grayscale(img);
-    Image *norm = normalize_contrast(gray);              // bonus
-    Image *bin  = to_binary(norm ? norm : gray, 128);
+static int has_image_extension(const char *name)
+{
+    const char *ext = strrchr(name, '.');
+    if (!ext) return 0;
 
-    // D: débruitage
-    Image *den  = denoise_image_median3x3(bin);
-
-    // C (déjà fait) : rotation manuelle possible ici si tu veux tester
-    // float angle = 10.0f; Image *rot = rotate_image(den ? den : bin, angle);
-
-    // Bonus : rotation auto
-    Image *rotA = auto_rotate(den ? den : bin, -8.0f, 8.0f, 0.5f);
-
-    save_image("processed_images/step_gray.png", gray);
-    if (norm) save_image("processed_images/step_norm.png", norm);
-    save_image("processed_images/step_bin.png",  bin);
-    if (den)  save_image("processed_images/step_denoise.png", den);
-    if (rotA) save_image("processed_images/step_autorot.png", rotA);
-
-    free_image(img);
-    free_image(gray);
-    if (norm) free_image(norm);
-    free_image(bin);
-    if (den)  free_image(den);
-    if (rotA) free_image(rotA);
-
-    puts("Prétraitement terminé. Résultats dans processed_images/.");
-    return 0;
+    return strcmp(ext, ".png")  == 0 || strcmp(ext, ".PNG")  == 0 ||
+           strcmp(ext, ".jpg")  == 0 || strcmp(ext, ".JPG")  == 0 ||
+           strcmp(ext, ".jpeg") == 0 || strcmp(ext, ".JPEG") == 0 ||
+           strcmp(ext, ".bmp")  == 0 || strcmp(ext, ".BMP")  == 0;
 }
 
+static int is_dot_entry(const char *name)
+{
+    return (name[0] == '.' && (name[1] == '\0' ||
+           (name[1] == '.' && name[2] == '\0')));
+}
 
+int main(void)
+{
+    DIR *dir = opendir(TESTS_DIR);
+    if (!dir)
+        return 1;
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (is_dot_entry(entry->d_name))
+            continue;
+        if (!has_image_extension(entry->d_name))
+            continue;
+
+        char input_path[512];
+        char output_path[512];
+        snprintf(input_path, sizeof(input_path), "%s/%s", TESTS_DIR, entry->d_name);
+        snprintf(output_path, sizeof(output_path), "%s/final_%s", OUTPUT_DIR, entry->d_name);
+
+        Image *img = load_image(input_path);
+        if (!img)
+            continue;
+
+        Image *gray = to_grayscale(img);
+        free_image(img);
+        if (!gray)
+            continue;
+
+        Image *bin = to_binary(gray, 128);
+        free_image(gray);
+        if (!bin)
+            continue;
+
+        save_image(output_path, bin);
+        free_image(bin);
+    }
+
+    closedir(dir);
+    return 0;
+}
