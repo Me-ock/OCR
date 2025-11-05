@@ -26,7 +26,6 @@ int is_black(unsigned char* img,int w,int h,int channels,int x,int y){
     unsigned char r = img[(y*w+x)*channels+0];
     unsigned char g = img[(y*w+x)*channels+1];
     unsigned char b = img[(y*w+x)*channels+2];
-    // CORRECTION : Tolérance légèrement augmentée
     return (r<150 && g<150 && b<150);
 }
 
@@ -38,7 +37,6 @@ Rect flood_fill(unsigned char* img,int w,int h,int channels,int* visited,int sta
 
     while(stack.size>0){
         Point p = pop(&stack);
-        // CORRECTION : dx/dy pour 8 directions
         int dx[8]={-1, 0, 1,-1, 1,-1, 0, 1};
         int dy[8]={-1,-1,-1, 0, 0, 1, 1, 1};
         
@@ -167,8 +165,6 @@ int main(int argc,char** argv){
     // Identifier la grille et la liste
     printf("Etape 3: Identification des blocs...\n");
     
-    // Heuristique: La grille est un grand bloc "carré"
-    // On pénalise les blocs trop "larges" ou trop "hauts"
     double max_grid_score = -1.0;
     int grid_index = -1;
 
@@ -202,8 +198,7 @@ int main(int argc,char** argv){
     save_rect(img,w,h,3,grid,"grid.png");
     printf("Grille détectée : (%d,%d) -> (%d,%d)\n",grid.x0,grid.y0,grid.x1,grid.y1);
 
-    // L'union de TOUS les autres blocs est la liste de mots
-    Rect words = {w,h,0,0}; // Initialiser en "inversé"
+    Rect words = {w,h,0,0};
     int found_words = 0;
 
     for(int i=0;i<n_merged;i++){

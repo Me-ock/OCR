@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-// AJOUT : Nécessaire pour mkdir (systèmes POSIX comme Linux/macOS)
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -10,7 +9,6 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-// --- Structures (identiques au script précédent) ---
 
 typedef struct { int x0,y0,x1,y1; } Rect;
 typedef struct { int x,y; } Point;
@@ -92,12 +90,7 @@ Rect rect_union(Rect r1, Rect r2) {
     return r;
 }
 
-// --- NOUVELLE FONCTION DE FUSION ---
 
-/**
- * @brief Vérifie si deux blobs (lettres) font partie du même mot.
- * Ils sont fusionnés s'ils sont proches horizontalement ET alignés verticalement.
- */
 int should_merge_as_word(Rect r1, Rect r2, double avg_h) {
     // 1. Calculer l'écart horizontal
     int h_gap = 0;
@@ -121,16 +114,11 @@ int should_merge_as_word(Rect r1, Rect r2, double avg_h) {
 }
 
 
-// --- MAIN ---
 
 int main(int argc,char** argv){
     if(argc<2){ printf("Usage: %s image_liste_mots.png\n",argv[0]); return 1;}
 
-    // --- MODIFICATION : Créer le dossier "words" ---
-    // Le mode 0777 donne les permissions complètes.
-    // La fonction ne fait rien si le dossier existe déjà (sur Linux/macOS).
     mkdir("words", 0777);
-    // --- Fin de la modification ---
 
     int w,h,channels;
     unsigned char* img = stbi_load(argv[1],&w,&h,&channels,3);
@@ -193,9 +181,7 @@ int main(int argc,char** argv){
         }
 
         char filename[100];
-        // --- MODIFICATION : Ajouter le préfixe "words/" au chemin ---
         sprintf(filename, "words/word_%03d.png", saved_count + 1);
-        // --- Fin de la modification ---
         
         save_rect(img, w, h, channels, merged_zones[i], filename);
         saved_count++;

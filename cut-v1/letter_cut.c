@@ -1,6 +1,3 @@
-// decoupe_grid_lines.c
-// compile: gcc decoupe_grid_lines.c -o decoupe_grid_lines -lm
-// usage:   ./decoupe_grid_lines grid.png
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -24,8 +21,6 @@ static void save_subimage(unsigned char *img, int width, int height,
     free(sub);
 }
 
-// detect runs where proj[i] > threshold, stores start/end pairs into runs (size 2*N)
-// returns number of ints written into runs (2 * number_of_runs)
 static int detect_runs(int *proj, int len, int threshold, int *runs, int maxruns)
 {
     int in_zone = 0, idx = 0;
