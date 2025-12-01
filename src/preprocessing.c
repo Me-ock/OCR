@@ -329,46 +329,47 @@ static double grid_score(const Image *bin)
 }
 
 // estime l'angle de redressement
-static float estimate_skew_angle(const Image *src_1c)
+static float estimate_skew_angle(Image *src_1c)
 {
-    // paramètres
-    const float min_deg = -45.0f;
-    const float max_deg = 45.0f;
-    const float step_deg = 0.5f;
+    const float min_deg  = -45.0f;
+    const float max_deg  =  45.0f;
+    const float step_deg =   0.5f;
 
-    // binaire de travail (si déjà binaire, ça ira pareil)
-    Image *bin = binarize_tmp_128(src_1c);
-    if (!bin)
-	    return 0.0f;
+    if (!src_1c || !src_1c->data || src_1c->channels != 1)
+        return 0.0f;
 
-    Image *small = downscale_half_1c(bin);
-    if (!small)
-    {
-	    free_image(bin);
-	    return 0.0f;
-    }
+    // 1) on réduit l'image en niveaux de gris
+    Image *small_gray = downscale_half_1c(src_1c);
+    if (!small_gray)
+        return 0.0f;
+
+    // 2) seuil automatique sur cette version réduite
+    unsigned char thr = otsu_threshold(small_gray);
+
+    // 3) binaire de travail pour le scoring
+    Image *small_bin = to_binary(small_gray, thr);
+    free_image(small_gray);
+    if (!small_bin)
+        return 0.0f;
 
     double best_score = -1.0;
-    float best_a = 0.0f;
+    float  best_a     =  0.0f;
 
+    // 4) balayage d'angles
     for (float a = min_deg; a <= max_deg + 1e-3f; a += step_deg) {
-        Image *rot = rotate_bilinear_1c(small, a);
+        Image *rot = rotate_bilinear_1c(small_bin, a);
         if (!rot)
-		continue;
+            continue;
 
         double s = grid_score(rot);
-
-        if (s > best_score)
-	{
-		best_score = s;
-		best_a = a;
-	}
+        if (s > best_score) {
+            best_score = s;
+            best_a = a;
+        }
         free_image(rot);
     }
 
-    free_image(small);
-    free_image(bin);
-
+    free_image(small_bin);
     return best_a;
 }
 
