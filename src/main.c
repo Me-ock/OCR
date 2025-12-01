@@ -58,7 +58,7 @@ int main(void)
         if (!deskew)
             continue;
 
-        Image *bin = to_binary(deskew, 128);
+        Image *bin = to_binary_auto(deskew);
         free_image(deskew);
         if (!bin)
             continue;

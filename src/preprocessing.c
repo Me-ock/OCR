@@ -1,4 +1,4 @@
-#include <stdlib.h>
+include <stdlib.h>
 #include "preprocessing.h"
 #include <math.h>
 #include <string.h>
@@ -57,6 +57,62 @@ Image* to_binary(Image *src, unsigned char threshold)
     return bin;
 }
 
+static unsigned char otsu_threshold(Image *src)
+{
+    if (!src || !src->data || src->channels != 1)
+        return 128;
+
+    int w = src->width;
+    int h = src->height;
+    int N = w * h;
+
+    int hist[256] = {0};
+
+    for (int i = 0; i < N; ++i) {
+        unsigned char v = src->data[i];
+        hist[v]++;
+    }
+
+    // somme totale du grisage
+    double sum = 0.0;
+    for (int t = 0; t < 256; ++t)
+        sum += (double)t * hist[t];
+
+    double sumB = 0.0;
+    int wB = 0;
+    int wF = 0;
+    double maxVar = -1.0;
+    int bestT = 128;
+
+    for (int t = 0; t < 256; ++t) {
+        wB += hist[t];
+        if (wB == 0)
+            continue;
+        wF = N - wB;
+        if (wF == 0)
+            break;
+
+        sumB += (double)t * hist[t];
+
+        double mB = sumB / wB;
+        double mF = (sum - sumB) / wF;
+
+        double varBetween = (double)wB * (double)wF * (mB - mF) * (mB - mF);
+
+        if (varBetween > maxVar) {
+            maxVar = varBetween;
+            bestT = t;
+        }
+    }
+
+    return (unsigned char)bestT;
+}
+
+Image* to_binary_auto(Image *src)
+{
+    unsigned char thr = otsu_threshold(src);
+    return to_binary(src, thr);
+}
 
 // ---------- helpers internes ----------
 
