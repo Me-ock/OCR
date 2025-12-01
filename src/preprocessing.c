@@ -335,35 +335,39 @@ static float estimate_skew_angle(const Image *src_1c)
     const float min_deg = -45.0f;
     const float max_deg = 45.0f;
     const float step_deg = 0.5f;
-    const float min_abs_deg = 0.3f;   // ignorer angles trop petits, ca va evite des bugs
-    const float eps_improve = 0.02f;
 
     // binaire de travail (si déjà binaire, ça ira pareil)
     Image *bin = binarize_tmp_128(src_1c);
-    if (!bin) return 0.0f;
+    if (!bin)
+	    return 0.0f;
 
     Image *small = downscale_half_1c(bin);
-    if (!small) { free_image(bin); return 0.0f; }
+    if (!small)
+    {
+	    free_image(bin);
+	    return 0.0f;
+    }
 
-    double base = grid_score(small);
-
-    double best = base;
+    double best_score = -1.0;
     float best_a = 0.0f;
 
     for (float a = min_deg; a <= max_deg + 1e-3f; a += step_deg) {
         Image *rot = rotate_bilinear_1c(small, a);
-        if (!rot) continue;
+        if (!rot)
+		continue;
+
         double s = grid_score(rot);
-        if (s > best) { best = s; best_a = a; }
+
+        if (s > best_score)
+	{
+		best_score = s;
+		best_a = a;
+	}
         free_image(rot);
     }
 
     free_image(small);
     free_image(bin);
-
-    // seuils d'acceptation
-    if (fabsf(best_a) < min_abs_deg) return 0.0f;
-    if (best < base * (1.0 + eps_improve)) return 0.0f;
 
     return best_a;
 }
@@ -376,9 +380,6 @@ Image* straighten_grid(Image *src)
         return NULL;
 
     float a = estimate_skew_angle(src);
-    if (a == 0.0f) {
-        // pas de rotation nécessaire → renvoie une copie
-        return copy_image_1c(src);
-    }
+
     return rotate_bilinear_1c(src, a);
 }

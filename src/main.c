@@ -45,42 +45,19 @@ int main(void)
         snprintf(output_path, sizeof(output_path), "%s/final_%s", OUTPUT_DIR, entry->d_name);
 
         Image *img = load_image(input_path);
-        if (!img)
-            continue;
 
         Image *gray = to_grayscale(img);
         free_image(img);
-        if (!gray)
-            continue;
 
         // straighten_grid peut soit retourner gray, soit une nouvelle image
         Image *deskew = straighten_grid(gray);
-        if (!deskew) {
-            free_image(gray);
-            continue;
-        }
-        if (deskew != gray) {
-            // nouvelle image -> on peut libérer l’ancienne
-            free_image(gray);
-        }
-        // sinon deskew == gray, on ne la libère qu'une seule fois plus tard
+        free_image(gray);
 
         Image *bin = to_binary_auto(deskew);
-        if (deskew == bin) {
-            // au cas où to_binary_auto réutiliserait le même pointeur (peu probable, mais sûr)
-            // on ne free deskew qu'une fois plus tard (via free_image(bin))
-        } else {
-            free_image(deskew);
-        }
-        if (!bin)
-            continue;
+        free_image(deskew);
 
         Image *clean = denoise_image_median3x3(bin);
-        if (clean != bin) {
-            free_image(bin);
-        }
-        if (!clean)
-            continue;
+	free_image(bin);
 
         save_image(output_path, clean);
         free_image(clean);
