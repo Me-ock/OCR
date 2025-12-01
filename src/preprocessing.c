@@ -114,7 +114,6 @@ Image* to_binary_auto(Image *src)
     return to_binary(src, thr);
 }
 
-// ---------- helpers internes ----------
 
 static Image* copy_image_1c(const Image *src)
 {
@@ -149,6 +148,61 @@ static Image* downscale_half_1c(const Image *src)
 
     return dst;
 }
+
+static void isort_9(unsigned char *a)
+{
+    for (int i = 1; i < 9; ++i) {
+        unsigned char key = a[i];
+        int j = i - 1;
+        while (j >= 0 && a[j] > key) {
+            a[j+1] = a[j];
+            j--;
+        }
+        a[j+1] = key;
+    }
+}
+
+Image* denoise_image_median3x3(Image *src)
+{
+    if (!src || !src->data || src->channels != 1)
+        return NULL;
+
+    int w = src->width;
+    int h = src->height;
+    size_t N = (size_t)w * h;
+
+    Image *dst = malloc(sizeof(Image));
+    if (!dst) return NULL;
+    dst->width = w;
+    dst->height = h;
+    dst->channels = 1;
+    dst->data = malloc(N);
+    if (!dst->data) {
+        free(dst);
+        return NULL;
+    }
+
+    // copie brute au début
+    memcpy(dst->data, src->data, N);
+
+    unsigned char win[9];
+
+    for (int y = 1; y < h - 1; ++y) {
+        for (int x = 1; x < w - 1; ++x) {
+            int k = 0;
+            for (int dy = -1; dy <= 1; ++dy) {
+                for (int dx = -1; dx <= 1; ++dx) {
+                    win[k++] = src->data[(y+dy)*w + (x+dx)];
+                }
+            }
+            isort_9(win);
+            dst->data[y*w + x] = win[4]; // médiane
+        }
+    }
+
+    return dst;
+}
+
 // Si l'image est en niveau de gris (pas forcément binaire), on crée une version binaire temporaire pour scorer.
 static Image* binarize_tmp_128(const Image *src)
 {
@@ -268,19 +322,21 @@ static Image* rotate_bilinear_1c(const Image *src, float angle_deg)
     return dst;
 }
 
-// score combiné vertical + horizontal
+// vertical + horizontal
 static double grid_score(const Image *bin)
 {
     return var_proj_x(bin) + var_proj_y(bin);
 }
 
-// estime l'angle de redressement ; retourne 0 si pas d’amélioration suffisante
+// estime l'angle de redressement
 static float estimate_skew_angle(const Image *src_1c)
 {
     // paramètres
-    const float min_deg = -8.0f, max_deg = 8.0f, step_deg = 0.5f;
-    const float min_abs_deg = 0.3f;   // ignorer angles trop petits
-    const float eps_improve = 0.02f;  // au moins +2% d'amélioration
+    const float min_deg = -45.0f;
+    const float max_deg = 45.0f;
+    const float step_deg = 0.5f;
+    const float min_abs_deg = 0.3f;   // ignorer angles trop petits, ca va evite des bugs
+    const float eps_improve = 0.02f;
 
     // binaire de travail (si déjà binaire, ça ira pareil)
     Image *bin = binarize_tmp_128(src_1c);
@@ -289,7 +345,6 @@ static float estimate_skew_angle(const Image *src_1c)
     Image *small = downscale_half_1c(bin);
     if (!small) { free_image(bin); return 0.0f; }
 
-    // score de référence
     double base = grid_score(small);
 
     double best = base;
@@ -313,7 +368,7 @@ static float estimate_skew_angle(const Image *src_1c)
     return best_a;
 }
 
-// ---------- API : redressement de tableau/grille ----------
+// redressement de tableau/grille 
 
 Image* straighten_grid(Image *src)
 {

@@ -53,18 +53,37 @@ int main(void)
         if (!gray)
             continue;
 
+        // straighten_grid peut soit retourner gray, soit une nouvelle image
         Image *deskew = straighten_grid(gray);
-        free_image(gray);
-        if (!deskew)
+        if (!deskew) {
+            free_image(gray);
             continue;
+        }
+        if (deskew != gray) {
+            // nouvelle image -> on peut libérer l’ancienne
+            free_image(gray);
+        }
+        // sinon deskew == gray, on ne la libère qu'une seule fois plus tard
 
         Image *bin = to_binary_auto(deskew);
-        free_image(deskew);
+        if (deskew == bin) {
+            // au cas où to_binary_auto réutiliserait le même pointeur (peu probable, mais sûr)
+            // on ne free deskew qu'une fois plus tard (via free_image(bin))
+        } else {
+            free_image(deskew);
+        }
         if (!bin)
             continue;
 
-        save_image(output_path, bin);
-        free_image(bin);
+        Image *clean = denoise_image_median3x3(bin);
+        if (clean != bin) {
+            free_image(bin);
+        }
+        if (!clean)
+            continue;
+
+        save_image(output_path, clean);
+        free_image(clean);
     }
 
     closedir(dir);
