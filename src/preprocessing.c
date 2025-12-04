@@ -192,70 +192,6 @@ Image* denoise_image_median3x3(Image *src)
     return dst;
 }
 
-Image* remove_grid_lines(Image *src)
-{
-    if (!src || !src->data || src->channels != 1)
-        return NULL;
-
-    int w = src->width;
-    int h = src->height;
-    size_t N = (size_t)w * h;
-
-    Image *dst = malloc(sizeof(Image));
-    if (!dst) return NULL;
-    dst->width = w;
-    dst->height = h;
-    dst->channels = 1;
-    dst->data = malloc(N);
-    if (!dst->data) {
-        free(dst);
-        return NULL;
-    }
-
-    memcpy(dst->data, src->data, N);
-
-    /* seuils : % minimal de noir sur une colonne / ligne
-       pour la considérer comme « ligne de grille »          */
-    float col_ratio = 0.70f;
-    float row_ratio = 0.70f;
-
-    int min_col_black = (int)(h * col_ratio);
-    int min_row_black = (int)(w * row_ratio);
-
-    if (min_col_black < 40) min_col_black = 40;
-    if (min_row_black < 40) min_row_black = 40;
-
-    /* --- Colonnes verticales --- */
-    for (int x = 0; x < w; ++x) {
-        int black_count = 0;
-        for (int y = 0; y < h; ++y) {
-            if (src->data[y * w + x] == 0)
-                ++black_count;
-        }
-        if (black_count >= min_col_black) {
-            /* colonne très « noire » → on la blanchit */
-            for (int y = 0; y < h; ++y)
-                dst->data[y * w + x] = 255;
-        }
-    }
-
-    /* --- Lignes horizontales --- */
-    for (int y = 0; y < h; ++y) {
-        int black_count = 0;
-        for (int x = 0; x < w; ++x) {
-            if (src->data[y * w + x] == 0)
-                ++black_count;
-        }
-        if (black_count >= min_row_black) {
-            /* ligne très « noire » → on la blanchit */
-            for (int x = 0; x < w; ++x)
-                dst->data[y * w + x] = 255;
-        }
-    }
-
-    return dst;
-}
-
 
 // variance des projections colonne (verticale)
 static double var_proj_x(const Image *im)
@@ -500,5 +436,111 @@ Image* remove_small_components(Image *src, int min_size)
     free(queue);
     free(vis);
     return dst;
+}
+
+
+void remove_grid_lines(Image *bin)
+{
+    if (!bin || !bin->data || bin->channels != 1)
+        return;
+
+    int w = bin->width;
+    int h = bin->height;
+    int N = w * h;
+
+    unsigned char *data = bin->data;
+
+    unsigned char *visited = calloc(N, 1);
+    if (!visited) return;
+
+    int *qx = malloc(sizeof(int) * N);
+    int *qy = malloc(sizeof(int) * N);
+    int *comp = malloc(sizeof(int) * N); /* indices des pixels du composant */
+    if (!qx || !qy || !comp) {
+        free(visited);
+        free(qx);
+        free(qy);
+        free(comp);
+        return;
+    }
+
+    /* longueur minimale pour considérer une vraie ligne */
+    int max_dim = (w > h) ? w : h;
+    int min_len = max_dim / 6;          /* ~ un sixième de l'image */
+
+    for (int y0 = 0; y0 < h; ++y0) {
+        for (int x0 = 0; x0 < w; ++x0) {
+            int idx0 = y0 * w + x0;
+            if (data[idx0] != 0 || visited[idx0])
+                continue;
+
+            /* BFS sur le composant noir */
+            int head = 0, tail = 0;
+            qx[tail] = x0;
+            qy[tail] = y0;
+            tail++;
+            visited[idx0] = 1;
+
+            int count = 0;
+            int minx = x0, maxx = x0;
+            int miny = y0, maxy = y0;
+
+            while (head < tail) {
+                int x = qx[head];
+                int y = qy[head];
+                int idx = y * w + x;
+                head++;
+
+                comp[count++] = idx;
+
+                if (x < minx) minx = x;
+                if (x > maxx) maxx = x;
+                if (y < miny) miny = y;
+                if (y > maxy) maxy = y;
+
+                /* 4-connexe */
+                const int dx[4] = {1,-1,0,0};
+                const int dy[4] = {0,0,1,-1};
+                for (int k = 0; k < 4; ++k) {
+                    int nx = x + dx[k];
+                    int ny = y + dy[k];
+                    if (nx < 0 || nx >= w || ny < 0 || ny >= h)
+                        continue;
+                    int nidx = ny * w + nx;
+                    if (data[nidx] == 0 && !visited[nidx]) {
+                        visited[nidx] = 1;
+                        qx[tail] = nx;
+                        qy[tail] = ny;
+                        tail++;
+                    }
+                }
+            }
+
+            int width  = maxx - minx + 1;
+            int height = maxy - miny + 1;
+
+            int vertical = 0;
+            int horizontal = 0;
+
+            /* ligne verticale très fine et longue */
+            if (width <= 3 && height >= min_len && height >= 4 * width)
+                vertical = 1;
+
+            /* ligne horizontale très fine et longue */
+            if (height <= 3 && width >= min_len && width >= 4 * height)
+                horizontal = 1;
+
+            if (vertical || horizontal) {
+                /* on efface ce composant = ligne de grille */
+                for (int i = 0; i < count; ++i)
+                    data[comp[i]] = 255;
+            }
+        }
+    }
+
+    free(visited);
+    free(qx);
+    free(qy);
+    free(comp);
 }
 

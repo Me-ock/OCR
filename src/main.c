@@ -54,11 +54,10 @@ int main(void)
 	Image *bin = to_binary_auto(deskew);
 	free_image(deskew);
 
-	Image *cle = remove_small_components(bin, 15);
-	free_image(bin);
+	remove_grid_lines(bin);
 
-	Image *clean = remove_grid_lines(cle);
-	free(cle);
+	Image *clean = remove_small_components(bin, 15);
+	free_image(bin);
 
 	save_image(output_path, clean);
 	free_image(clean);
