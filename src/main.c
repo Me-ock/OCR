@@ -58,14 +58,14 @@ int main(void)
 	Image *bin = to_binary_auto(contrast);
 	free_image(contrast);
 
-	Image *no_grid = remove_grid_lines(bin);
+	Image *clean = denoise_image_median3x3(bin);
 	free_image(bin);
 
-	Image *clean = denoise_image_median3x3(no_grid);
-	free_image(no_grid);
-
-	save_image(output_path, clean);
+	Image *no = remove_grid_lines(clean);
 	free_image(clean);
+
+	save_image(output_path, no);
+	free_image(no);
     }
 
     closedir(dir);

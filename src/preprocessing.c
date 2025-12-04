@@ -114,58 +114,6 @@ Image* to_binary_auto(Image *src)
     return to_binary(src, thr);
 }
 
-Image* remove_grid_lines(Image *src)
-{
-    if (!src || !src->data || src->channels != 1)
-        return NULL;
-
-    int w = src->width;
-    int h = src->height;
-
-    Image *dst = malloc(sizeof(Image));
-    if (!dst) return NULL;
-    dst->width = w;
-    dst->height = h;
-    dst->channels = 1;
-    dst->data = malloc((size_t)w*h);
-    if (!dst->data) { free(dst); return NULL; }
-
-    memcpy(dst->data, src->data, (size_t)w*h);
-
-    int min_run_h = w / 2;
-    int min_run_v = h / 2;
-
-    if (min_run_h < 80) min_run_h = 80;
-    if (min_run_v < 80) min_run_v = 80;
-
-    for (int y = 0; y < h; ++y) {
-        int x = 0;
-        while (x < w) {
-            while (x < w && src->data[y*w + x] != 0) x++;
-            int start = x;
-            while (x < w && src->data[y*w + x] == 0) x++;
-            int run = x - start;
-            if (run >= min_run_h)
-                for (int k = start; k < x; ++k)
-                    dst->data[y*w + k] = 255;
-        }
-    }
-
-    for (int x = 0; x < w; ++x) {
-        int y = 0;
-        while (y < h) {
-            while (y < h && src->data[y*w + x] != 0) y++;
-            int start = y;
-            while (y < h && src->data[y*w + x] == 0) y++;
-            int run = y - start;
-            if (run >= min_run_v)
-                for (int k = start; k < y; ++k)
-                    dst->data[k*w + x] = 255;
-        }
-    }
-
-    return dst;
-}
 
 static Image* copy_image_1c(const Image *src)
 {
@@ -249,6 +197,59 @@ Image* denoise_image_median3x3(Image *src)
             }
             isort_9(win);
             dst->data[y*w + x] = win[4]; // médiane
+        }
+    }
+
+    return dst;
+}
+
+Image* remove_grid_lines(Image *src)
+{
+    if (!src || !src->data || src->channels != 1)
+        return NULL;
+
+    int w = src->width;
+    int h = src->height;
+
+    Image *dst = malloc(sizeof(Image));
+    if (!dst) return NULL;
+    dst->width = w;
+    dst->height = h;
+    dst->channels = 1;
+    dst->data = malloc((size_t)w*h);
+    if (!dst->data) { free(dst); return NULL; }
+
+    memcpy(dst->data, src->data, (size_t)w*h);
+
+    int min_run_h = w / 2;
+    int min_run_v = h / 2;
+
+    if (min_run_h < 80) min_run_h = 80;
+    if (min_run_v < 80) min_run_v = 80;
+
+    for (int y = 0; y < h; ++y) {
+        int x = 0;
+        while (x < w) {
+            while (x < w && src->data[y*w + x] != 0) x++;
+            int start = x;
+            while (x < w && src->data[y*w + x] == 0) x++;
+            int run = x - start;
+            if (run >= min_run_h)
+                for (int k = start; k < x; ++k)
+                    dst->data[y*w + k] = 255;
+        }
+    }
+
+    for (int x = 0; x < w; ++x) {
+        int y = 0;
+        while (y < h) {
+            while (y < h && src->data[y*w + x] != 0) y++;
+            int start = y;
+            while (y < h && src->data[y*w + x] == 0) y++;
+            int run = y - start;
+            if (run >= min_run_v)
+                for (int k = start; k < y; ++k)
+                    dst->data[k*w + x] = 255;
         }
     }
 
