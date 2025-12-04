@@ -328,7 +328,6 @@ static double grid_score(const Image *bin)
     return var_proj_x(bin) + var_proj_y(bin);
 }
 
-// estime l'angle de redressement
 static float estimate_skew_angle(Image *src_1c)
 {
     const float min_deg  = -45.0f;
@@ -338,15 +337,12 @@ static float estimate_skew_angle(Image *src_1c)
     if (!src_1c || !src_1c->data || src_1c->channels != 1)
         return 0.0f;
 
-    // 1) on réduit l'image en niveaux de gris
     Image *small_gray = downscale_half_1c(src_1c);
     if (!small_gray)
         return 0.0f;
 
-    // 2) seuil automatique sur cette version réduite
     unsigned char thr = otsu_threshold(small_gray);
 
-    // 3) binaire de travail pour le scoring
     Image *small_bin = to_binary(small_gray, thr);
     free_image(small_gray);
     if (!small_bin)
@@ -355,7 +351,6 @@ static float estimate_skew_angle(Image *src_1c)
     double best_score = -1.0;
     float  best_a     =  0.0f;
 
-    // 4) balayage d'angles
     for (float a = min_deg; a <= max_deg + 1e-3f; a += step_deg) {
         Image *rot = rotate_bilinear_1c(small_bin, a);
         if (!rot)
@@ -372,7 +367,6 @@ static float estimate_skew_angle(Image *src_1c)
     free_image(small_bin);
     return best_a;
 }
-
 // redressement de tableau/grille 
 
 Image* straighten_grid(Image *src)
