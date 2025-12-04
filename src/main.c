@@ -57,7 +57,7 @@ int main(void)
 	Image *no_grid = remove_grid_lines(bin);
 	free_image(bin);
 
-	Image *no_small = remove_small_components(no_grid, 40); // 40 ou 30 à ajuster
+	Image *no_small = remove_small_components(no_grid, 10);
 	free_image(no_grid);
 
 	save_image(output_path, no_small);

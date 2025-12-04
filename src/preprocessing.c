@@ -199,51 +199,60 @@ Image* remove_grid_lines(Image *src)
 
     int w = src->width;
     int h = src->height;
+    size_t N = (size_t)w * h;
 
     Image *dst = malloc(sizeof(Image));
     if (!dst) return NULL;
     dst->width = w;
     dst->height = h;
     dst->channels = 1;
-    dst->data = malloc((size_t)w*h);
+    dst->data = malloc(N);
     if (!dst->data) { free(dst); return NULL; }
 
-    memcpy(dst->data, src->data, (size_t)w*h);
+    memcpy(dst->data, src->data, N);
 
-    int min_run_h = w / 2;
-    int min_run_v = h / 2;
-
-    if (min_run_h < 80) min_run_h = 80;
-    if (min_run_v < 80) min_run_v = 80;
+    int *colCount = calloc(w, sizeof(int));
+    int *rowCount = calloc(h, sizeof(int));
+    if (!colCount || !rowCount) {
+        free(colCount);
+        free(rowCount);
+        free(dst->data);
+        free(dst);
+        return NULL;
+    }
 
     for (int y = 0; y < h; ++y) {
-        int x = 0;
-        while (x < w) {
-            while (x < w && src->data[y*w + x] != 0) x++;
-            int start = x;
-            while (x < w && src->data[y*w + x] == 0) x++;
-            int run = x - start;
-            if (run >= min_run_h)
-                for (int k = start; k < x; ++k)
-                    dst->data[y*w + k] = 255;
+        for (int x = 0; x < w; ++x) {
+            if (src->data[y*w + x] == 0) {
+                colCount[x]++;
+                rowCount[y]++;
+            }
         }
     }
+
+    int col_thresh = (int)(0.7f * h);
+    int row_thresh = (int)(0.7f * w);
 
     for (int x = 0; x < w; ++x) {
-        int y = 0;
-        while (y < h) {
-            while (y < h && src->data[y*w + x] != 0) y++;
-            int start = y;
-            while (y < h && src->data[y*w + x] == 0) y++;
-            int run = y - start;
-            if (run >= min_run_v)
-                for (int k = start; k < y; ++k)
-                    dst->data[k*w + x] = 255;
+        if (colCount[x] > col_thresh) {
+            for (int y = 0; y < h; ++y)
+                dst->data[y*w + x] = 255;
         }
     }
 
+    for (int y = 0; y < h; ++y) {
+        if (rowCount[y] > row_thresh) {
+            for (int x = 0; x < w; ++x)
+                dst->data[y*w + x] = 255;
+        }
+    }
+
+    free(colCount);
+    free(rowCount);
     return dst;
 }
+
+
 
 Image* enhance_contrast(Image *src)
 {
