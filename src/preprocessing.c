@@ -110,10 +110,51 @@ static unsigned char otsu_threshold(Image *src)
 
 Image* to_binary_auto(Image *src)
 {
-    unsigned char thr = otsu_threshold(src);
-    return to_binary(src, thr);
-}
+    if (!src || !src->data || src->channels != 1)
+        return NULL;
 
+    int w = src->width;
+    int h = src->height;
+
+    int window = w / 16;
+    if (window < 15) window = 15;
+    if (window % 2 == 0) window++;
+
+    int half = window / 2;
+
+    Image *dst = malloc(sizeof(Image));
+    if (!dst) return NULL;
+    dst->width = w;
+    dst->height = h;
+    dst->channels = 1;
+    dst->data = malloc((size_t)w*h);
+    if (!dst->data) { free(dst); return NULL; }
+
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+
+            int sum = 0;
+            int count = 0;
+
+            int y0 = (y - half < 0    ? 0    : y - half);
+            int y1 = (y + half >= h ? h - 1 : y + half);
+            int x0 = (x - half < 0    ? 0    : x - half);
+            int x1 = (x + half >= w ? w - 1 : x + half);
+
+            for (int yy = y0; yy <= y1; ++yy)
+                for (int xx = x0; xx <= x1; ++xx) {
+                    sum += src->data[yy*w + xx];
+                    count++;
+                }
+
+            int localMean = sum / count;
+
+            dst->data[y*w + x] = (src->data[y*w + x] < localMean - 10) ? 0 : 255;
+        }
+    }
+
+    return dst;
+}
 
 static Image* copy_image_1c(const Image *src)
 {
