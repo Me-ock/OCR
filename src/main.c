@@ -43,10 +43,9 @@ int main(void)
         char output_path[512];
         snprintf(input_path, sizeof(input_path), "%s/%s", TESTS_DIR, entry->d_name);
         snprintf(output_path, sizeof(output_path), "%s/final_%s", OUTPUT_DIR, entry->d_name);
+	Image *img   = load_image(input_path);
 
-	Image *img = load_image(input_path);
-
-	Image *gray = to_grayscale(img);
+	Image *gray  = to_grayscale(img);
 	free_image(img);
 
 	Image *deskew = straighten_grid(gray);
@@ -58,11 +57,11 @@ int main(void)
 	Image *no_grid = remove_grid_lines(bin);
 	free_image(bin);
 
-	Image *clean = denoise_image_median3x3(no_grid);
+	Image *no_small = remove_small_components(no_grid, 40); // 40 ou 30 à ajuster
 	free_image(no_grid);
 
-	save_image(output_path, clean);
-	free_image(clean);
+	save_image(output_path, no_small);
+	free_image(no_small);
     }
 
     closedir(dir);

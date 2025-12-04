@@ -446,3 +446,87 @@ Image* straighten_grid(Image *src)
     float a = estimate_skew_angle(src);
     return rotate_bilinear_1c(src, a);
 }
+
+Image* remove_small_components(Image *src, int min_size)
+{
+    if (!src || !src->data || src->channels != 1)
+        return NULL;
+
+    int w = src->width;
+    int h = src->height;
+    size_t N = (size_t)w * h;
+
+    Image *dst = malloc(sizeof(Image));
+    if (!dst) return NULL;
+    dst->width = w;
+    dst->height = h;
+    dst->channels = 1;
+    dst->data = malloc(N);
+    if (!dst->data) { free(dst); return NULL; }
+
+    memcpy(dst->data, src->data, N);
+
+    unsigned char *vis = calloc(N, 1);
+    if (!vis) { free(dst->data); free(dst); return NULL; }
+
+    int *queue = malloc(N * sizeof(int));
+    if (!queue) { free(vis); free(dst->data); free(dst); return NULL; }
+
+    for (size_t start = 0; start < N; ++start) {
+        if (dst->data[start] != 0 || vis[start])
+            continue;
+
+        int head = 0, tail = 0;
+        int count = 0;
+
+        queue[tail++] = (int)start;
+        vis[start] = 1;
+
+        while (head < tail) {
+            int idx = queue[head++];
+            count++;
+
+            int y = idx / w;
+            int x = idx % w;
+
+            if (x > 0) {
+                int n = idx - 1;
+                if (!vis[n] && dst->data[n] == 0) {
+                    vis[n] = 1;
+                    queue[tail++] = n;
+                }
+            }
+            if (x + 1 < w) {
+                int n = idx + 1;
+                if (!vis[n] && dst->data[n] == 0) {
+                    vis[n] = 1;
+                    queue[tail++] = n;
+                }
+            }
+            if (y > 0) {
+                int n = idx - w;
+                if (!vis[n] && dst->data[n] == 0) {
+                    vis[n] = 1;
+                    queue[tail++] = n;
+                }
+            }
+            if (y + 1 < h) {
+                int n = idx + w;
+                if (!vis[n] && dst->data[n] == 0) {
+                    vis[n] = 1;
+                    queue[tail++] = n;
+                }
+            }
+        }
+
+        if (count < min_size) {
+            for (int i = 0; i < tail; ++i)
+                dst->data[queue[i]] = 255;
+        }
+    }
+
+    free(queue);
+    free(vis);
+    return dst;
+}
+
