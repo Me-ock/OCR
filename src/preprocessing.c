@@ -162,46 +162,6 @@ static void isort_9(unsigned char *a)
     }
 }
 
-Image* denoise_image_median3x3(Image *src)
-{
-    if (!src || !src->data || src->channels != 1)
-        return NULL;
-
-    int w = src->width;
-    int h = src->height;
-    size_t N = (size_t)w * h;
-
-    Image *dst = malloc(sizeof(Image));
-    if (!dst) return NULL;
-    dst->width = w;
-    dst->height = h;
-    dst->channels = 1;
-    dst->data = malloc(N);
-    if (!dst->data) {
-        free(dst);
-        return NULL;
-    }
-
-    // copie brute au début
-    memcpy(dst->data, src->data, N);
-
-    unsigned char win[9];
-
-    for (int y = 1; y < h - 1; ++y) {
-        for (int x = 1; x < w - 1; ++x) {
-            int k = 0;
-            for (int dy = -1; dy <= 1; ++dy) {
-                for (int dx = -1; dx <= 1; ++dx) {
-                    win[k++] = src->data[(y+dy)*w + (x+dx)];
-                }
-            }
-            isort_9(win);
-            dst->data[y*w + x] = win[4]; // médiane
-        }
-    }
-
-    return dst;
-}
 
 Image* remove_grid_lines(Image *src)
 {
@@ -468,11 +428,9 @@ Image* straighten_grid(Image *src)
         return NULL;
 
     float a = estimate_skew_angle(src);
-
-    return rotate_bilinear_1c(src, a);
 }
 
-Image* smooth_image(Image *src)
+Image* denoise_image_median3x3(Image *src)
 {
     if (!src || !src->data || src->channels != 1)
         return NULL;
@@ -488,20 +446,21 @@ Image* smooth_image(Image *src)
     dst->data = malloc((size_t)w*h);
     if (!dst->data) { free(dst); return NULL; }
 
+    memcpy(dst->data, src->data, (size_t)w*h);
+
     for (int y = 1; y < h - 1; ++y) {
         for (int x = 1; x < w - 1; ++x) {
-            int sum = 0;
-            sum += src->data[(y-1)*w + (x-1)];
-            sum += src->data[(y-1)*w + x];
-            sum += src->data[(y-1)*w + (x+1)];
-            sum += src->data[y*w + (x-1)];
-            sum += src->data[y*w + x];
-            sum += src->data[y*w + (x+1)];
-            sum += src->data[(y+1)*w + (x-1)];
-            sum += src->data[(y+1)*w + x];
-            sum += src->data[(y+1)*w + (x+1)];
+            if (src->data[y*w + x] != 0)
+                continue;
 
-            dst->data[y*w + x] = (unsigned char)(sum / 9);
+            int black = 0;
+            for (int dy = -1; dy <= 1; ++dy)
+                for (int dx = -1; dx <= 1; ++dx)
+                    if (src->data[(y+dy)*w + (x+dx)] == 0)
+                        black++;
+
+            if (black <= 2)
+                dst->data[y*w + x] = 255;
         }
     }
 

@@ -45,17 +45,15 @@ int main(void)
         snprintf(output_path, sizeof(output_path), "%s/final_%s", OUTPUT_DIR, entry->d_name);
 
 	Image *img = load_image(input_path);
+
 	Image *gray = to_grayscale(img);
 	free_image(img);
 
 	Image *deskew = straighten_grid(gray);
 	free_image(gray);
 
-	Image *smooth = smooth_image(deskew);
+	Image *bin = to_binary_auto(deskew);
 	free_image(deskew);
-
-	Image *bin = to_binary_auto(smooth);
-	free_image(smooth);
 
 	Image *no_grid = remove_grid_lines(bin);
 	free_image(bin);
