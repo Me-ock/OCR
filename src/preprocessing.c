@@ -113,47 +113,8 @@ Image* to_binary_auto(Image *src)
     if (!src || !src->data || src->channels != 1)
         return NULL;
 
-    int w = src->width;
-    int h = src->height;
-
-    int window = w / 16;
-    if (window < 15) window = 15;
-    if (window % 2 == 0) window++;
-
-    int half = window / 2;
-
-    Image *dst = malloc(sizeof(Image));
-    if (!dst) return NULL;
-    dst->width = w;
-    dst->height = h;
-    dst->channels = 1;
-    dst->data = malloc((size_t)w*h);
-    if (!dst->data) { free(dst); return NULL; }
-
-    for (int y = 0; y < h; ++y) {
-        for (int x = 0; x < w; ++x) {
-
-            int sum = 0;
-            int count = 0;
-
-            int y0 = (y - half < 0    ? 0    : y - half);
-            int y1 = (y + half >= h ? h - 1 : y + half);
-            int x0 = (x - half < 0    ? 0    : x - half);
-            int x1 = (x + half >= w ? w - 1 : x + half);
-
-            for (int yy = y0; yy <= y1; ++yy)
-                for (int xx = x0; xx <= x1; ++xx) {
-                    sum += src->data[yy*w + xx];
-                    count++;
-                }
-
-            int localMean = sum / count;
-
-            dst->data[y*w + x] = (src->data[y*w + x] < localMean - 10) ? 0 : 255;
-        }
-    }
-
-    return dst;
+    unsigned char thr = otsu_threshold(src);
+    return to_binary(src, thr);
 }
 
 static Image* copy_image_1c(const Image *src)
@@ -198,32 +159,48 @@ Image* denoise_image_median3x3(Image *src)
     int w = src->width;
     int h = src->height;
 
+    Image *tmp = malloc(sizeof(Image));
+    if (!tmp) return NULL;
+    tmp->width = w;
+    tmp->height = h;
+    tmp->channels = 1;
+    tmp->data = malloc((size_t)w*h);
+    if (!tmp->data) { free(tmp); return NULL; }
+
     Image *dst = malloc(sizeof(Image));
-    if (!dst) return NULL;
+    if (!dst) { free(tmp->data); free(tmp); return NULL; }
     dst->width = w;
     dst->height = h;
     dst->channels = 1;
     dst->data = malloc((size_t)w*h);
-    if (!dst->data) { free(dst); return NULL; }
+    if (!dst->data) { free(tmp->data); free(tmp); free(dst); return NULL; }
 
-    memcpy(dst->data, src->data, (size_t)w*h);
+    memcpy(tmp->data, src->data, (size_t)w*h);
 
     for (int y = 1; y < h - 1; ++y) {
         for (int x = 1; x < w - 1; ++x) {
-            if (src->data[y*w + x] != 0)
-                continue;
-
-            int black = 0;
-            for (int dy = -1; dy <= 1; ++dy)
+            int all_black = 1;
+            for (int dy = -1; dy <= 1 && all_black; ++dy)
                 for (int dx = -1; dx <= 1; ++dx)
-                    if (src->data[(y+dy)*w + (x+dx)] == 0)
-                        black++;
-
-            if (black <= 2)
-                dst->data[y*w + x] = 255;
+                    if (src->data[(y+dy)*w + (x+dx)] != 0) { all_black = 0; break; }
+            tmp->data[y*w + x] = all_black ? 0 : 255;
         }
     }
 
+    memcpy(dst->data, tmp->data, (size_t)w*h);
+
+    for (int y = 1; y < h - 1; ++y) {
+        for (int x = 1; x < w - 1; ++x) {
+            int any_black = 0;
+            for (int dy = -1; dy <= 1 && !any_black; ++dy)
+                for (int dx = -1; dx <= 1; ++dx)
+                    if (tmp->data[(y+dy)*w + (x+dx)] == 0) { any_black = 1; break; }
+            dst->data[y*w + x] = any_black ? 0 : 255;
+        }
+    }
+
+    free(tmp->data);
+    free(tmp);
     return dst;
 }
 
