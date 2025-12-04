@@ -149,19 +149,42 @@ static Image* downscale_half_1c(const Image *src)
     return dst;
 }
 
-static void isort_9(unsigned char *a)
+Image* denoise_image_median3x3(Image *src)
 {
-    for (int i = 1; i < 9; ++i) {
-        unsigned char key = a[i];
-        int j = i - 1;
-        while (j >= 0 && a[j] > key) {
-            a[j+1] = a[j];
-            j--;
-        }
-        a[j+1] = key;
-    }
-}
+    if (!src || !src->data || src->channels != 1)
+        return NULL;
 
+    int w = src->width;
+    int h = src->height;
+
+    Image *dst = malloc(sizeof(Image));
+    if (!dst) return NULL;
+    dst->width = w;
+    dst->height = h;
+    dst->channels = 1;
+    dst->data = malloc((size_t)w*h);
+    if (!dst->data) { free(dst); return NULL; }
+
+    memcpy(dst->data, src->data, (size_t)w*h);
+
+    for (int y = 1; y < h - 1; ++y) {
+        for (int x = 1; x < w - 1; ++x) {
+            if (src->data[y*w + x] != 0)
+                continue;
+
+            int black = 0;
+            for (int dy = -1; dy <= 1; ++dy)
+                for (int dx = -1; dx <= 1; ++dx)
+                    if (src->data[(y+dy)*w + (x+dx)] == 0)
+                        black++;
+
+            if (black <= 2)
+                dst->data[y*w + x] = 255;
+        }
+    }
+
+    return dst;
+}
 
 Image* remove_grid_lines(Image *src)
 {
@@ -254,22 +277,6 @@ Image* enhance_contrast(Image *src)
     }
 
     return dst;
-}
-
-// Si l'image est en niveau de gris (pas forcément binaire), on crée une version binaire temporaire pour scorer.
-static Image* binarize_tmp_128(const Image *src)
-{
-    if (!src || !src->data || src->channels != 1) return NULL;
-    int w = src->width, h = src->height;
-    Image *bin = malloc(sizeof(Image));
-    if (!bin) return NULL;
-    bin->width = w; bin->height = h; bin->channels = 1;
-    bin->data = malloc((size_t)w * h);
-    if (!bin->data) { free(bin); return NULL; }
-
-    for (int i = 0; i < w*h; ++i)
-        bin->data[i] = (src->data[i] > 128) ? 255 : 0;
-    return bin;
 }
 
 // variance des projections colonne (verticale)
@@ -366,9 +373,13 @@ static Image* rotate_bilinear_1c(const Image *src, float angle_deg)
                 float v1 = p10 * (1.0f - dx) + p11 * dx;
                 float v  = v0  * (1.0f - dy) + v1  * dy;
 
-                int vi = (int)(v + 0.5f);
-                if (vi < 0) vi = 0; if (vi > 255) vi = 255;
-                dst->data[y * new_w + x] = (unsigned char)vi;
+		int vi = (int)(v + 0.5f);
+		if (vi < 0)
+			vi = 0;
+		else if (vi > 255)
+    			vi = 255;
+
+		dst->data[y * new_w + x] = (unsigned char)vi;
             }
         }
     }
@@ -420,7 +431,6 @@ static float estimate_skew_angle(Image *src_1c)
     free_image(small_bin);
     return best_a;
 }
-// redressement de tableau/grille 
 
 Image* straighten_grid(Image *src)
 {
@@ -428,41 +438,5 @@ Image* straighten_grid(Image *src)
         return NULL;
 
     float a = estimate_skew_angle(src);
-}
-
-Image* denoise_image_median3x3(Image *src)
-{
-    if (!src || !src->data || src->channels != 1)
-        return NULL;
-
-    int w = src->width;
-    int h = src->height;
-
-    Image *dst = malloc(sizeof(Image));
-    if (!dst) return NULL;
-    dst->width = w;
-    dst->height = h;
-    dst->channels = 1;
-    dst->data = malloc((size_t)w*h);
-    if (!dst->data) { free(dst); return NULL; }
-
-    memcpy(dst->data, src->data, (size_t)w*h);
-
-    for (int y = 1; y < h - 1; ++y) {
-        for (int x = 1; x < w - 1; ++x) {
-            if (src->data[y*w + x] != 0)
-                continue;
-
-            int black = 0;
-            for (int dy = -1; dy <= 1; ++dy)
-                for (int dx = -1; dx <= 1; ++dx)
-                    if (src->data[(y+dy)*w + (x+dx)] == 0)
-                        black++;
-
-            if (black <= 2)
-                dst->data[y*w + x] = 255;
-        }
-    }
-
-    return dst;
+    return rotate_bilinear_1c(src, a);
 }
