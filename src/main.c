@@ -54,14 +54,14 @@ int main(void)
 	Image *bin = to_binary_auto(deskew);
 	free_image(deskew);
 
-	Image *no_grid = remove_grid_lines(bin);
+	Image *cle = remove_small_components(bin, 15);
 	free_image(bin);
 
-	Image *no_small = remove_small_components(no_grid, 15);
-	free_image(no_grid);
+	Image *clean = remove_grid_lines(cle);
+	free(cle);
 
-	save_image(output_path, no_small);
-	free_image(no_small);
+	save_image(output_path, clean);
+	free_image(clean);
     }
 
     closedir(dir);

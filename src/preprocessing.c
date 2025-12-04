@@ -207,79 +207,27 @@ Image* remove_grid_lines(Image *src)
     dst->height = h;
     dst->channels = 1;
     dst->data = malloc(N);
-    if (!dst->data) { free(dst); return NULL; }
-
-    memcpy(dst->data, src->data, N);
-
-    int *colCount = calloc(w, sizeof(int));
-    int *rowCount = calloc(h, sizeof(int));
-    if (!colCount || !rowCount) {
-        free(colCount);
-        free(rowCount);
-        free(dst->data);
+    if (!dst->data) {
         free(dst);
         return NULL;
     }
 
-    for (int y = 0; y < h; ++y) {
-        for (int x = 0; x < w; ++x) {
-            if (src->data[y*w + x] == 0) {
-                colCount[x]++;
-                rowCount[y]++;
-            }
-        }
-    }
+    memcpy(dst->data, src->data, N);
 
-    int grid_x_min = w, grid_x_max = -1;
-    int grid_y_min = h, grid_y_max = -1;
-
-    int col_band_thresh = (int)(0.1f * h);
-    int row_band_thresh = (int)(0.1f * w);
+    int min_run_v = h / 2;
+    if (min_run_v < 40) min_run_v = 40;
+    int min_run_h = w / 2;
+    if (min_run_h < 40) min_run_h = 40;
 
     for (int x = 0; x < w; ++x) {
-        if (colCount[x] > col_band_thresh) {
-            if (x < grid_x_min) grid_x_min = x;
-            if (x > grid_x_max) grid_x_max = x;
-        }
-    }
-    for (int y = 0; y < h; ++y) {
-        if (rowCount[y] > row_band_thresh) {
-            if (y < grid_y_min) grid_y_min = y;
-            if (y > grid_y_max) grid_y_max = y;
-        }
-    }
-
-    free(colCount);
-    free(rowCount);
-
-    if (grid_x_max < grid_x_min || grid_y_max < grid_y_min) {
-        return dst;
-    }
-
-    grid_x_min -= 2; if (grid_x_min < 0) grid_x_min = 0;
-    grid_x_max += 2; if (grid_x_max >= w) grid_x_max = w - 1;
-    grid_y_min -= 2; if (grid_y_min < 0) grid_y_min = 0;
-    grid_y_max += 2; if (grid_y_max >= h) grid_y_max = h - 1;
-
-    int grid_h = grid_y_max - grid_y_min + 1;
-    int grid_w = grid_x_max - grid_x_min + 1;
-
-    /* longueur minimale pour considérer qu’un segment est une "ligne" */
-    int min_run_v = grid_h / 3;
-    if (min_run_v < 25) min_run_v = 25;
-    int min_run_h = grid_w / 3;
-    if (min_run_h < 25) min_run_h = 25;
-
-    for (int x = grid_x_min; x <= grid_x_max; ++x) {
-        int y = grid_y_min;
-        while (y <= grid_y_max) {
+        int y = 0;
+        while (y < h) {
             if (src->data[y*w + x] == 0) {
                 int y0 = y;
-                while (y <= grid_y_max && src->data[y*w + x] == 0)
+                while (y < h && src->data[y*w + x] == 0)
                     ++y;
                 int len = y - y0;
                 if (len >= min_run_v) {
-                    /* on efface ce segment : c’est une ligne verticale de grille */
                     for (int yy = y0; yy < y; ++yy)
                         dst->data[yy*w + x] = 255;
                 }
@@ -289,12 +237,12 @@ Image* remove_grid_lines(Image *src)
         }
     }
 
-    for (int y = grid_y_min; y <= grid_y_max; ++y) {
-        int x = grid_x_min;
-        while (x <= grid_x_max) {
+    for (int y = 0; y < h; ++y) {
+        int x = 0;
+        while (x < w) {
             if (src->data[y*w + x] == 0) {
                 int x0 = x;
-                while (x <= grid_x_max && src->data[y*w + x] == 0)
+                while (x < w && src->data[y*w + x] == 0)
                     ++x;
                 int len = x - x0;
                 if (len >= min_run_h) {
@@ -309,6 +257,8 @@ Image* remove_grid_lines(Image *src)
 
     return dst;
 }
+
+
 
 Image* enhance_contrast(Image *src)
 {
