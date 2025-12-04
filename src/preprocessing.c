@@ -177,19 +177,20 @@ Image* denoise_image_median3x3(Image *src)
             int black = 0;
             for (int dy = -1; dy <= 1; ++dy) {
                 for (int dx = -1; dx <= 1; ++dx) {
+                    if (dy == 0 && dx == 0)
+                        continue;
                     if (src->data[(y+dy)*w + (x+dx)] == 0)
                         black++;
                 }
             }
 
-            if (black <= 2)
+            if (black == 0)
                 dst->data[y*w + x] = 255;
         }
     }
 
     return dst;
 }
-
 
 Image* remove_grid_lines(Image *src)
 {
