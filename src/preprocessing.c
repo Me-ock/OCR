@@ -108,12 +108,35 @@ static unsigned char otsu_threshold(Image *src)
     return (unsigned char)bestT;
 }
 
-Image* to_binary_auto(Image *src)
+static unsigned char auto_threshold(Image *src)
 {
-    unsigned char thr = otsu_threshold(src);
-    return to_binary(src, thr);
+    if (!src || !src->data || src->channels != 1)
+        return 128;
+
+    int w = src->width;
+    int h = src->height;
+    int N = w * h;
+
+    unsigned char maxv = 0;
+    for (int i = 0; i < N; ++i) {
+        unsigned char v = src->data[i];
+        if (v > maxv)
+            maxv = v;
+    }
+
+    if (maxv > 240) {
+        unsigned char thr = (unsigned char)(maxv - 20);  // ex: 255 -> 235
+        return thr;
+    }
+
+    return otsu_threshold(src);
 }
 
+Image* to_binary_auto(Image *src)
+{
+    unsigned char thr = auto_threshold(src);
+    return to_binary(src, thr);
+}
 
 static Image* copy_image_1c(const Image *src)
 {

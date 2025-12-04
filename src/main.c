@@ -45,8 +45,6 @@ int main(void)
         snprintf(output_path, sizeof(output_path), "%s/final_%s", OUTPUT_DIR, entry->d_name);
 
 	Image *img = load_image(input_path);
-	if (!img)
-		continue;
 
 	Image *gray = to_grayscale(img);
 	free_image(img);
