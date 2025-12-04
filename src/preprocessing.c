@@ -134,38 +134,51 @@ Image* remove_grid_lines(Image *src)
         return NULL;
     }
 
+    // copie de base
     memcpy(dst->data, src->data, N);
 
-    int min_run = w / 40;
-    if (min_run < 10)
-        min_run = 10;
+    int *row_black = calloc((size_t)h, sizeof(int));
+    int *col_black = calloc((size_t)w, sizeof(int));
+    if (!row_black || !col_black) {
+        free(row_black);
+        free(col_black);
+        free(dst->data);
+        free(dst);
+        return NULL;
+    }
 
+    // compte de pixels noirs par ligne et par colonne
     for (int y = 0; y < h; ++y) {
         for (int x = 0; x < w; ++x) {
-            if (src->data[y * w + x] != 0)  // on ne regarde que les pixels noirs
-                continue;
-
-            int xl = x;
-            while (xl > 0 && src->data[y * w + (xl - 1)] == 0)
-                xl--;
-            int xr = x;
-            while (xr + 1 < w && src->data[y * w + (xr + 1)] == 0)
-                xr++;
-            int hrun = xr - xl + 1;
-
-            int yt = y;
-            while (yt > 0 && src->data[(yt - 1) * w + x] == 0)
-                yt--;
-            int yb = y;
-            while (yb + 1 < h && src->data[(yb + 1) * w + x] == 0)
-                yb++;
-            int vrun = yb - yt + 1;
-
-            if (hrun >= min_run || vrun >= min_run)
-                dst->data[y * w + x] = 255;
+            if (src->data[y * w + x] == 0) {
+                row_black[y]++;
+                col_black[x]++;
+            }
         }
     }
 
+    // seuils : proportion de noir pour considérer que c'est une ligne/colonne de grille
+    int row_thresh = (int)(0.6f * w);  // >60% de noir sur la ligne
+    int col_thresh = (int)(0.6f * h);  // >60% de noir sur la colonne
+
+    // enlève les lignes horizontales
+    for (int y = 0; y < h; ++y) {
+        if (row_black[y] >= row_thresh) {
+            for (int x = 0; x < w; ++x)
+                dst->data[y * w + x] = 255;  // blanc
+        }
+    }
+
+    // enlève les lignes verticales
+    for (int x = 0; x < w; ++x) {
+        if (col_black[x] >= col_thresh) {
+            for (int y = 0; y < h; ++y)
+                dst->data[y * w + x] = 255;  // blanc
+        }
+    }
+
+    free(row_black);
+    free(col_black);
     return dst;
 }
 
