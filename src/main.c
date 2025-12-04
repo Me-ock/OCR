@@ -44,23 +44,27 @@ int main(void)
         snprintf(input_path, sizeof(input_path), "%s/%s", TESTS_DIR, entry->d_name);
         snprintf(output_path, sizeof(output_path), "%s/final_%s", OUTPUT_DIR, entry->d_name);
 
-        Image *img = load_image(input_path);
+	Image *img = load_image(input_path);
+	if (!img)
+		continue;
 
-        Image *gray = to_grayscale(img);
-        free_image(img);
+	Image *gray = to_grayscale(img);
+	free_image(img);
 
-        // straighten_grid peut soit retourner gray, soit une nouvelle image
-        Image *deskew = straighten_grid(gray);
-        free_image(gray);
+	Image *deskew = straighten_grid(gray);
+	free_image(gray);
 
-        Image *bin = to_binary_auto(deskew);
-        free_image(deskew);
+	Image *contrast = enhance_contrast(deskew);
+	free_image(deskew);
 
-        Image *clean = denoise_image_median3x3(bin);
+	Image *bin = to_binary_auto(contrast);
+	free_image(contrast);
+
+	Image *clean = denoise_image_median3x3(bin);
 	free_image(bin);
 
-        save_image(output_path, clean);
-        free_image(clean);
+	save_image(output_path, clean);
+	free_image(clean);
     }
 
     closedir(dir);

@@ -32,6 +32,45 @@ Image* to_grayscale(Image *src)
     return gray;
 }
 
+Image* enhance_contrast(Image *src)
+{
+    if (!src || !src->data || src->channels != 1)
+        return NULL;
+
+    int w = src->width;
+    int h = src->height;
+    int N = w * h;
+
+    unsigned char minv = 255, maxv = 0;
+
+    for (int i = 0; i < N; i++) {
+        unsigned char v = src->data[i];
+        if (v < minv) minv = v;
+        if (v > maxv) maxv = v;
+    }
+
+    if (maxv == minv)
+        return copy_image_1c(src);
+
+    Image *dst = malloc(sizeof(Image));
+    if (!dst) return NULL;
+    dst->width = w;
+    dst->height = h;
+    dst->channels = 1;
+    dst->data = malloc(N);
+    if (!dst->data) { free(dst); return NULL; }
+
+    float scale = 255.0f / (maxv - minv);
+
+    for (int i = 0; i < N; i++) {
+        int v = (int)((src->data[i] - minv) * scale);
+        if (v < 0) v = 0;
+        if (v > 255) v = 255;
+        dst->data[i] = (unsigned char)v;
+    }
+
+    return dst;
+}
 
 // permet le stockage  
 Image* to_binary(Image *src, unsigned char threshold) 
