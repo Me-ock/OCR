@@ -108,34 +108,65 @@ static unsigned char otsu_threshold(Image *src)
     return (unsigned char)bestT;
 }
 
-static unsigned char auto_threshold(Image *src)
+Image* to_binary_auto(Image *src)
+{
+    unsigned char thr = otsu_threshold(src);
+    return to_binary(src, thr);
+}
+
+Image* remove_grid_lines(Image *src)
 {
     if (!src || !src->data || src->channels != 1)
-        return 128;
+        return NULL;
 
     int w = src->width;
     int h = src->height;
-    int N = w * h;
+    size_t N = (size_t)w * h;
 
-    unsigned char maxv = 0;
-    for (int i = 0; i < N; ++i) {
-        unsigned char v = src->data[i];
-        if (v > maxv)
-            maxv = v;
+    Image *dst = malloc(sizeof(Image));
+    if (!dst) return NULL;
+    dst->width = w;
+    dst->height = h;
+    dst->channels = 1;
+    dst->data = malloc(N);
+    if (!dst->data) {
+        free(dst);
+        return NULL;
     }
 
-    if (maxv > 240) {
-        unsigned char thr = (unsigned char)(maxv - 20);  // ex: 255 -> 235
-        return thr;
+    memcpy(dst->data, src->data, N);
+
+    int min_run = w / 40;
+    if (min_run < 10)
+        min_run = 10;
+
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            if (src->data[y * w + x] != 0)  // on ne regarde que les pixels noirs
+                continue;
+
+            int xl = x;
+            while (xl > 0 && src->data[y * w + (xl - 1)] == 0)
+                xl--;
+            int xr = x;
+            while (xr + 1 < w && src->data[y * w + (xr + 1)] == 0)
+                xr++;
+            int hrun = xr - xl + 1;
+
+            int yt = y;
+            while (yt > 0 && src->data[(yt - 1) * w + x] == 0)
+                yt--;
+            int yb = y;
+            while (yb + 1 < h && src->data[(yb + 1) * w + x] == 0)
+                yb++;
+            int vrun = yb - yt + 1;
+
+            if (hrun >= min_run || vrun >= min_run)
+                dst->data[y * w + x] = 255;
+        }
     }
 
-    return otsu_threshold(src);
-}
-
-Image* to_binary_auto(Image *src)
-{
-    unsigned char thr = auto_threshold(src);
-    return to_binary(src, thr);
+    return dst;
 }
 
 static Image* copy_image_1c(const Image *src)
