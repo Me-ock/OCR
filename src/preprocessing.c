@@ -159,50 +159,37 @@ Image* denoise_image_median3x3(Image *src)
     int w = src->width;
     int h = src->height;
 
-    Image *tmp = malloc(sizeof(Image));
-    if (!tmp) return NULL;
-    tmp->width = w;
-    tmp->height = h;
-    tmp->channels = 1;
-    tmp->data = malloc((size_t)w*h);
-    if (!tmp->data) { free(tmp); return NULL; }
-
     Image *dst = malloc(sizeof(Image));
-    if (!dst) { free(tmp->data); free(tmp); return NULL; }
+    if (!dst) return NULL;
     dst->width = w;
     dst->height = h;
     dst->channels = 1;
     dst->data = malloc((size_t)w*h);
-    if (!dst->data) { free(tmp->data); free(tmp); free(dst); return NULL; }
+    if (!dst->data) { free(dst); return NULL; }
 
-    memcpy(tmp->data, src->data, (size_t)w*h);
-
-    for (int y = 1; y < h - 1; ++y) {
-        for (int x = 1; x < w - 1; ++x) {
-            int all_black = 1;
-            for (int dy = -1; dy <= 1 && all_black; ++dy)
-                for (int dx = -1; dx <= 1; ++dx)
-                    if (src->data[(y+dy)*w + (x+dx)] != 0) { all_black = 0; break; }
-            tmp->data[y*w + x] = all_black ? 0 : 255;
-        }
-    }
-
-    memcpy(dst->data, tmp->data, (size_t)w*h);
+    memcpy(dst->data, src->data, (size_t)w*h);
 
     for (int y = 1; y < h - 1; ++y) {
         for (int x = 1; x < w - 1; ++x) {
-            int any_black = 0;
-            for (int dy = -1; dy <= 1 && !any_black; ++dy)
-                for (int dx = -1; dx <= 1; ++dx)
-                    if (tmp->data[(y+dy)*w + (x+dx)] == 0) { any_black = 1; break; }
-            dst->data[y*w + x] = any_black ? 0 : 255;
+            if (src->data[y*w + x] != 0)
+                continue;
+
+            int black = 0;
+            for (int dy = -1; dy <= 1; ++dy) {
+                for (int dx = -1; dx <= 1; ++dx) {
+                    if (src->data[(y+dy)*w + (x+dx)] == 0)
+                        black++;
+                }
+            }
+
+            if (black <= 2)
+                dst->data[y*w + x] = 255;
         }
     }
 
-    free(tmp->data);
-    free(tmp);
     return dst;
 }
+
 
 Image* remove_grid_lines(Image *src)
 {
