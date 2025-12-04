@@ -214,91 +214,48 @@ Image* remove_grid_lines(Image *src)
 
     memcpy(dst->data, src->data, N);
 
-    int min_run_v = h / 2;
-    if (min_run_v < 40) min_run_v = 40;
-    int min_run_h = w / 2;
-    if (min_run_h < 40) min_run_h = 40;
+    /* seuils : % minimal de noir sur une colonne / ligne
+       pour la considérer comme « ligne de grille »          */
+    float col_ratio = 0.70f;
+    float row_ratio = 0.70f;
 
+    int min_col_black = (int)(h * col_ratio);
+    int min_row_black = (int)(w * row_ratio);
+
+    if (min_col_black < 40) min_col_black = 40;
+    if (min_row_black < 40) min_row_black = 40;
+
+    /* --- Colonnes verticales --- */
     for (int x = 0; x < w; ++x) {
-        int y = 0;
-        while (y < h) {
-            if (src->data[y*w + x] == 0) {
-                int y0 = y;
-                while (y < h && src->data[y*w + x] == 0)
-                    ++y;
-                int len = y - y0;
-                if (len >= min_run_v) {
-                    for (int yy = y0; yy < y; ++yy)
-                        dst->data[yy*w + x] = 255;
-                }
-            } else {
-                ++y;
-            }
+        int black_count = 0;
+        for (int y = 0; y < h; ++y) {
+            if (src->data[y * w + x] == 0)
+                ++black_count;
+        }
+        if (black_count >= min_col_black) {
+            /* colonne très « noire » → on la blanchit */
+            for (int y = 0; y < h; ++y)
+                dst->data[y * w + x] = 255;
         }
     }
 
+    /* --- Lignes horizontales --- */
     for (int y = 0; y < h; ++y) {
-        int x = 0;
-        while (x < w) {
-            if (src->data[y*w + x] == 0) {
-                int x0 = x;
-                while (x < w && src->data[y*w + x] == 0)
-                    ++x;
-                int len = x - x0;
-                if (len >= min_run_h) {
-                    for (int xx = x0; xx < x; ++xx)
-                        dst->data[y*w + xx] = 255;
-                }
-            } else {
-                ++x;
-            }
+        int black_count = 0;
+        for (int x = 0; x < w; ++x) {
+            if (src->data[y * w + x] == 0)
+                ++black_count;
+        }
+        if (black_count >= min_row_black) {
+            /* ligne très « noire » → on la blanchit */
+            for (int x = 0; x < w; ++x)
+                dst->data[y * w + x] = 255;
         }
     }
 
     return dst;
 }
 
-
-
-Image* enhance_contrast(Image *src)
-{
-    if (!src || !src->data || src->channels != 1)
-        return NULL;
-
-    int w = src->width;
-    int h = src->height;
-    int N = w * h;
-
-    unsigned char minv = 255, maxv = 0;
-
-    for (int i = 0; i < N; i++) {
-        unsigned char v = src->data[i];
-        if (v < minv) minv = v;
-        if (v > maxv) maxv = v;
-    }
-
-    if (maxv == minv)
-        return copy_image_1c(src);
-
-    Image *dst = malloc(sizeof(Image));
-    if (!dst) return NULL;
-    dst->width = w;
-    dst->height = h;
-    dst->channels = 1;
-    dst->data = malloc(N);
-    if (!dst->data) { free(dst); return NULL; }
-
-    float scale = 255.0f / (maxv - minv);
-
-    for (int i = 0; i < N; i++) {
-        int v = (int)((src->data[i] - minv) * scale);
-        if (v < 0) v = 0;
-        if (v > 255) v = 255;
-        dst->data[i] = (unsigned char)v;
-    }
-
-    return dst;
-}
 
 // variance des projections colonne (verticale)
 static double var_proj_x(const Image *im)
