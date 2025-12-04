@@ -221,17 +221,20 @@ Image* remove_grid_lines(Image *src)
         return NULL;
     }
 
-    for (int y = 0; y < h; ++y)
-        for (int x = 0; x < w; ++x)
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
             if (src->data[y*w + x] == 0) {
                 colCount[x]++;
                 rowCount[y]++;
             }
+        }
+    }
 
     int grid_x_min = w, grid_x_max = -1;
     int grid_y_min = h, grid_y_max = -1;
 
-    int col_band_thresh = (int)(0.3f * h);
+    int col_band_thresh = (int)(0.1f * h);
+    int row_band_thresh = (int)(0.1f * w);
 
     for (int x = 0; x < w; ++x) {
         if (colCount[x] > col_band_thresh) {
@@ -239,9 +242,6 @@ Image* remove_grid_lines(Image *src)
             if (x > grid_x_max) grid_x_max = x;
         }
     }
-
-    int row_band_thresh = (int)(0.3f * w);
-
     for (int y = 0; y < h; ++y) {
         if (rowCount[y] > row_band_thresh) {
             if (y < grid_y_min) grid_y_min = y;
@@ -249,9 +249,10 @@ Image* remove_grid_lines(Image *src)
         }
     }
 
+    free(colCount);
+    free(rowCount);
+
     if (grid_x_max < grid_x_min || grid_y_max < grid_y_min) {
-        free(colCount);
-        free(rowCount);
         return dst;
     }
 
@@ -260,65 +261,54 @@ Image* remove_grid_lines(Image *src)
     grid_y_min -= 2; if (grid_y_min < 0) grid_y_min = 0;
     grid_y_max += 2; if (grid_y_max >= h) grid_y_max = h - 1;
 
-    int *rowGrid = calloc(h, sizeof(int));
-    if (!rowGrid) {
-        free(colCount);
-        free(rowCount);
-        free(dst->data);
-        free(dst);
-        return NULL;
-    }
+    int grid_h = grid_y_max - grid_y_min + 1;
+    int grid_w = grid_x_max - grid_x_min + 1;
 
-    for (int y = grid_y_min; y <= grid_y_max; ++y) {
-        int cnt = 0;
-        for (int x = grid_x_min; x <= grid_x_max; ++x)
-            if (src->data[y*w + x] == 0)
-                cnt++;
-        rowGrid[y] = cnt;
-    }
-
-    int *colGrid = calloc(w, sizeof(int));
-    if (!colGrid) {
-        free(rowGrid);
-        free(colCount);
-        free(rowCount);
-        free(dst->data);
-        free(dst);
-        return NULL;
-    }
+    /* longueur minimale pour considérer qu’un segment est une "ligne" */
+    int min_run_v = grid_h / 3;
+    if (min_run_v < 25) min_run_v = 25;
+    int min_run_h = grid_w / 3;
+    if (min_run_h < 25) min_run_h = 25;
 
     for (int x = grid_x_min; x <= grid_x_max; ++x) {
-        int cnt = 0;
-        for (int y = grid_y_min; y <= grid_y_max; ++y)
-            if (src->data[y*w + x] == 0)
-                cnt++;
-        colGrid[x] = cnt;
-    }
-
-    int row_line_thresh = (int)(0.6f * (grid_x_max - grid_x_min + 1));
-    int col_line_thresh = (int)(0.6f * (grid_y_max - grid_y_min + 1));
-
-    for (int y = grid_y_min; y <= grid_y_max; ++y) {
-        if (rowGrid[y] > row_line_thresh) {
-            for (int x = grid_x_min; x <= grid_x_max; ++x)
-                dst->data[y*w + x] = 255;
+        int y = grid_y_min;
+        while (y <= grid_y_max) {
+            if (src->data[y*w + x] == 0) {
+                int y0 = y;
+                while (y <= grid_y_max && src->data[y*w + x] == 0)
+                    ++y;
+                int len = y - y0;
+                if (len >= min_run_v) {
+                    /* on efface ce segment : c’est une ligne verticale de grille */
+                    for (int yy = y0; yy < y; ++yy)
+                        dst->data[yy*w + x] = 255;
+                }
+            } else {
+                ++y;
+            }
         }
     }
 
-    for (int x = grid_x_min; x <= grid_x_max; ++x) {
-        if (colGrid[x] > col_line_thresh) {
-            for (int y = grid_y_min; y <= grid_y_max; ++y)
-                dst->data[y*w + x] = 255;
+    for (int y = grid_y_min; y <= grid_y_max; ++y) {
+        int x = grid_x_min;
+        while (x <= grid_x_max) {
+            if (src->data[y*w + x] == 0) {
+                int x0 = x;
+                while (x <= grid_x_max && src->data[y*w + x] == 0)
+                    ++x;
+                int len = x - x0;
+                if (len >= min_run_h) {
+                    for (int xx = x0; xx < x; ++xx)
+                        dst->data[y*w + xx] = 255;
+                }
+            } else {
+                ++x;
+            }
         }
     }
 
-    free(colGrid);
-    free(rowGrid);
-    free(colCount);
-    free(rowCount);
     return dst;
 }
-
 
 Image* enhance_contrast(Image *src)
 {
