@@ -134,7 +134,6 @@ Image* remove_grid_lines(Image *src)
         return NULL;
     }
 
-    // copie de base
     memcpy(dst->data, src->data, N);
 
     int *row_black = calloc((size_t)h, sizeof(int));
@@ -147,7 +146,6 @@ Image* remove_grid_lines(Image *src)
         return NULL;
     }
 
-    // compte de pixels noirs par ligne et par colonne
     for (int y = 0; y < h; ++y) {
         for (int x = 0; x < w; ++x) {
             if (src->data[y * w + x] == 0) {
@@ -157,23 +155,29 @@ Image* remove_grid_lines(Image *src)
         }
     }
 
-    // seuils : proportion de noir pour considérer que c'est une ligne/colonne de grille
-    int row_thresh = (int)(0.6f * w);  // >60% de noir sur la ligne
-    int col_thresh = (int)(0.6f * h);  // >60% de noir sur la colonne
+    int max_row = 0, max_col = 0;
+    for (int y = 0; y < h; ++y)
+        if (row_black[y] > max_row) max_row = row_black[y];
+    for (int x = 0; x < w; ++x)
+        if (col_black[x] > max_col) max_col = col_black[x];
 
-    // enlève les lignes horizontales
+    int row_thresh = (int)(0.8f * (float)max_row);
+    int col_thresh = (int)(0.8f * (float)max_col);
+
+    if (max_row < w / 10) row_thresh = max_row + 1;
+    if (max_col < h / 10) col_thresh = max_col + 1;
+
     for (int y = 0; y < h; ++y) {
         if (row_black[y] >= row_thresh) {
             for (int x = 0; x < w; ++x)
-                dst->data[y * w + x] = 255;  // blanc
+                dst->data[y * w + x] = 255;
         }
     }
 
-    // enlève les lignes verticales
     for (int x = 0; x < w; ++x) {
         if (col_black[x] >= col_thresh) {
             for (int y = 0; y < h; ++y)
-                dst->data[y * w + x] = 255;  // blanc
+                dst->data[y * w + x] = 255;
         }
     }
 
