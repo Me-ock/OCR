@@ -24,5 +24,6 @@ run: all
 
 clean:
 	rm -f $(OBJ) $(TARGET)
+	rm -f processed_images/*
 
 re: clean all

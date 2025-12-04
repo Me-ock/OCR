@@ -221,37 +221,103 @@ Image* remove_grid_lines(Image *src)
         return NULL;
     }
 
-    for (int y = 0; y < h; ++y) {
-        for (int x = 0; x < w; ++x) {
+    for (int y = 0; y < h; ++y)
+        for (int x = 0; x < w; ++x)
             if (src->data[y*w + x] == 0) {
                 colCount[x]++;
                 rowCount[y]++;
             }
-        }
-    }
 
-    int col_thresh = (int)(0.7f * h);
-    int row_thresh = (int)(0.7f * w);
+    int grid_x_min = w, grid_x_max = -1;
+    int grid_y_min = h, grid_y_max = -1;
+
+    int col_band_thresh = (int)(0.3f * h);
 
     for (int x = 0; x < w; ++x) {
-        if (colCount[x] > col_thresh) {
-            for (int y = 0; y < h; ++y)
-                dst->data[y*w + x] = 255;
+        if (colCount[x] > col_band_thresh) {
+            if (x < grid_x_min) grid_x_min = x;
+            if (x > grid_x_max) grid_x_max = x;
         }
     }
+
+    int row_band_thresh = (int)(0.3f * w);
 
     for (int y = 0; y < h; ++y) {
-        if (rowCount[y] > row_thresh) {
-            for (int x = 0; x < w; ++x)
+        if (rowCount[y] > row_band_thresh) {
+            if (y < grid_y_min) grid_y_min = y;
+            if (y > grid_y_max) grid_y_max = y;
+        }
+    }
+
+    if (grid_x_max < grid_x_min || grid_y_max < grid_y_min) {
+        free(colCount);
+        free(rowCount);
+        return dst;
+    }
+
+    grid_x_min -= 2; if (grid_x_min < 0) grid_x_min = 0;
+    grid_x_max += 2; if (grid_x_max >= w) grid_x_max = w - 1;
+    grid_y_min -= 2; if (grid_y_min < 0) grid_y_min = 0;
+    grid_y_max += 2; if (grid_y_max >= h) grid_y_max = h - 1;
+
+    int *rowGrid = calloc(h, sizeof(int));
+    if (!rowGrid) {
+        free(colCount);
+        free(rowCount);
+        free(dst->data);
+        free(dst);
+        return NULL;
+    }
+
+    for (int y = grid_y_min; y <= grid_y_max; ++y) {
+        int cnt = 0;
+        for (int x = grid_x_min; x <= grid_x_max; ++x)
+            if (src->data[y*w + x] == 0)
+                cnt++;
+        rowGrid[y] = cnt;
+    }
+
+    int *colGrid = calloc(w, sizeof(int));
+    if (!colGrid) {
+        free(rowGrid);
+        free(colCount);
+        free(rowCount);
+        free(dst->data);
+        free(dst);
+        return NULL;
+    }
+
+    for (int x = grid_x_min; x <= grid_x_max; ++x) {
+        int cnt = 0;
+        for (int y = grid_y_min; y <= grid_y_max; ++y)
+            if (src->data[y*w + x] == 0)
+                cnt++;
+        colGrid[x] = cnt;
+    }
+
+    int row_line_thresh = (int)(0.6f * (grid_x_max - grid_x_min + 1));
+    int col_line_thresh = (int)(0.6f * (grid_y_max - grid_y_min + 1));
+
+    for (int y = grid_y_min; y <= grid_y_max; ++y) {
+        if (rowGrid[y] > row_line_thresh) {
+            for (int x = grid_x_min; x <= grid_x_max; ++x)
                 dst->data[y*w + x] = 255;
         }
     }
 
+    for (int x = grid_x_min; x <= grid_x_max; ++x) {
+        if (colGrid[x] > col_line_thresh) {
+            for (int y = grid_y_min; y <= grid_y_max; ++y)
+                dst->data[y*w + x] = 255;
+        }
+    }
+
+    free(colGrid);
+    free(rowGrid);
     free(colCount);
     free(rowCount);
     return dst;
 }
-
 
 
 Image* enhance_contrast(Image *src)
