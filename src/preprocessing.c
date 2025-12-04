@@ -471,3 +471,39 @@ Image* straighten_grid(Image *src)
 
     return rotate_bilinear_1c(src, a);
 }
+
+Image* smooth_image(Image *src)
+{
+    if (!src || !src->data || src->channels != 1)
+        return NULL;
+
+    int w = src->width;
+    int h = src->height;
+
+    Image *dst = malloc(sizeof(Image));
+    if (!dst) return NULL;
+    dst->width = w;
+    dst->height = h;
+    dst->channels = 1;
+    dst->data = malloc((size_t)w*h);
+    if (!dst->data) { free(dst); return NULL; }
+
+    for (int y = 1; y < h - 1; ++y) {
+        for (int x = 1; x < w - 1; ++x) {
+            int sum = 0;
+            sum += src->data[(y-1)*w + (x-1)];
+            sum += src->data[(y-1)*w + x];
+            sum += src->data[(y-1)*w + (x+1)];
+            sum += src->data[y*w + (x-1)];
+            sum += src->data[y*w + x];
+            sum += src->data[y*w + (x+1)];
+            sum += src->data[(y+1)*w + (x-1)];
+            sum += src->data[(y+1)*w + x];
+            sum += src->data[(y+1)*w + (x+1)];
+
+            dst->data[y*w + x] = (unsigned char)(sum / 9);
+        }
+    }
+
+    return dst;
+}

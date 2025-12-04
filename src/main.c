@@ -45,27 +45,26 @@ int main(void)
         snprintf(output_path, sizeof(output_path), "%s/final_%s", OUTPUT_DIR, entry->d_name);
 
 	Image *img = load_image(input_path);
-
 	Image *gray = to_grayscale(img);
 	free_image(img);
 
 	Image *deskew = straighten_grid(gray);
 	free_image(gray);
 
-	Image *contrast = enhance_contrast(deskew);
+	Image *smooth = smooth_image(deskew);
 	free_image(deskew);
 
-	Image *bin = to_binary_auto(contrast);
-	free_image(contrast);
+	Image *bin = to_binary_auto(smooth);
+	free_image(smooth);
 
-	Image *clean = denoise_image_median3x3(bin);
+	Image *no_grid = remove_grid_lines(bin);
 	free_image(bin);
 
-	Image *no = remove_grid_lines(clean);
-	free_image(clean);
+	Image *clean = denoise_image_median3x3(no_grid);
+	free_image(no_grid);
 
-	save_image(output_path, no);
-	free_image(no);
+	save_image(output_path, clean);
+	free_image(clean);
     }
 
     closedir(dir);
