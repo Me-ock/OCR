@@ -121,68 +121,49 @@ Image* remove_grid_lines(Image *src)
 
     int w = src->width;
     int h = src->height;
-    size_t N = (size_t)w * h;
 
     Image *dst = malloc(sizeof(Image));
     if (!dst) return NULL;
     dst->width = w;
     dst->height = h;
     dst->channels = 1;
-    dst->data = malloc(N);
-    if (!dst->data) {
-        free(dst);
-        return NULL;
-    }
+    dst->data = malloc((size_t)w*h);
+    if (!dst->data) { free(dst); return NULL; }
 
-    memcpy(dst->data, src->data, N);
+    memcpy(dst->data, src->data, (size_t)w*h);
 
-    int *row_black = calloc((size_t)h, sizeof(int));
-    int *col_black = calloc((size_t)w, sizeof(int));
-    if (!row_black || !col_black) {
-        free(row_black);
-        free(col_black);
-        free(dst->data);
-        free(dst);
-        return NULL;
-    }
+    int min_run_h = w / 2;
+    int min_run_v = h / 2;
+
+    if (min_run_h < 80) min_run_h = 80;
+    if (min_run_v < 80) min_run_v = 80;
 
     for (int y = 0; y < h; ++y) {
-        for (int x = 0; x < w; ++x) {
-            if (src->data[y * w + x] == 0) {
-                row_black[y]++;
-                col_black[x]++;
-            }
-        }
-    }
-
-    int max_row = 0, max_col = 0;
-    for (int y = 0; y < h; ++y)
-        if (row_black[y] > max_row) max_row = row_black[y];
-    for (int x = 0; x < w; ++x)
-        if (col_black[x] > max_col) max_col = col_black[x];
-
-    int row_thresh = (int)(0.8f * (float)max_row);
-    int col_thresh = (int)(0.8f * (float)max_col);
-
-    if (max_row < w / 10) row_thresh = max_row + 1;
-    if (max_col < h / 10) col_thresh = max_col + 1;
-
-    for (int y = 0; y < h; ++y) {
-        if (row_black[y] >= row_thresh) {
-            for (int x = 0; x < w; ++x)
-                dst->data[y * w + x] = 255;
+        int x = 0;
+        while (x < w) {
+            while (x < w && src->data[y*w + x] != 0) x++;
+            int start = x;
+            while (x < w && src->data[y*w + x] == 0) x++;
+            int run = x - start;
+            if (run >= min_run_h)
+                for (int k = start; k < x; ++k)
+                    dst->data[y*w + k] = 255;
         }
     }
 
     for (int x = 0; x < w; ++x) {
-        if (col_black[x] >= col_thresh) {
-            for (int y = 0; y < h; ++y)
-                dst->data[y * w + x] = 255;
+        int y = 0;
+        while (y < h) {
+            while (y < h && src->data[y*w + x] != 0) y++;
+            int start = y;
+            while (y < h && src->data[y*w + x] == 0) y++;
+            int run = y - start;
+            if (run >= min_run_v)
+                for (int k = start; k < y; ++k)
+                    dst->data[k*w + x] = 255;
         }
     }
 
-    free(row_black);
-    free(col_black);
     return dst;
 }
 
