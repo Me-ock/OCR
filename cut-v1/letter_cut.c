@@ -1,200 +1,141 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+typedef struct { int x0,y0,x1,y1; } Rect;
+typedef struct { int x,y; } Point;
+typedef struct { Point* data; int size,capacity; } Stack;
 
-static void save_subimage(unsigned char *img, int width, int height,
-                          int x0, int y0, int x1, int y1, const char *filename)
-{
-    if (x1 <= x0 || y1 <= y0) return;
-    int w = x1 - x0 + 1;
-    int h = y1 - y0 + 1;
-    unsigned char *sub = malloc(w * h);
-    if (!sub) return;
-    for (int y = 0; y < h; y++)
-        memcpy(sub + y * w, img + (y + y0) * width + x0, w);
-    stbi_write_png(filename, w, h, 1, sub, w);
-    free(sub);
+void push(Stack* s, Point p){
+    if(s->size>=s->capacity){
+        s->capacity*=2;
+        s->data = realloc(s->data, s->capacity*sizeof(Point));
+    }
+    s->data[s->size++] = p;
 }
 
-static int detect_runs(int *proj, int len, int threshold, int *runs, int maxruns)
-{
-    int in_zone = 0, idx = 0;
-    int start = 0;
-    for (int i = 0; i < len; i++) {
-        if (proj[i] > threshold) {
-            if (!in_zone) { in_zone = 1; start = i; }
-        } else {
-            if (in_zone) {
-                if (idx + 2 <= maxruns) {
-                    runs[idx++] = start;
-                    runs[idx++] = i - 1;
-                }
-                in_zone = 0;
+Point pop(Stack* s){ return s->data[--s->size]; }
+
+int is_black(unsigned char* img, int w, int h, int x, int y){
+    if(x<0 || x>=w || y<0 || y>=h) return 0;
+    unsigned char* p = img + (y * w + x) * 4;
+    if (p[3] < 100) return 0;
+    return (p[0] < 150 && p[1] < 150 && p[2] < 150);
+}
+
+Rect flood_fill(unsigned char* img, int w, int h, int* visited, int start_x, int start_y){
+    Stack stack; stack.data=malloc(1024*sizeof(Point)); stack.size=0; stack.capacity=1024;
+    push(&stack,(Point){start_x,start_y}); visited[start_y*w+start_x]=1;
+    int x0=start_x,y0=start_y,x1=start_x,y1=start_y;
+
+    while(stack.size>0){
+        Point p = pop(&stack);
+        int dx[8]={-1, 0, 1,-1, 1,-1, 0, 1};
+        int dy[8]={-1,-1,-1, 0, 0, 1, 1, 1};
+        for(int i=0;i<8;i++){
+            int nx=p.x+dx[i], ny=p.y+dy[i];
+            if(nx>=0 && nx<w && ny>=0 && ny<h && !visited[ny*w+nx] && is_black(img,w,h,nx,ny)){
+                push(&stack,(Point){nx,ny});
+                visited[ny*w+nx]=1;
+                if(nx<x0)x0=nx; if(ny<y0)y0=ny;
+                if(nx>x1)x1=nx; if(ny>y1)y1=ny;
             }
         }
     }
-    if (in_zone) {
-        if (idx + 2 <= maxruns) {
-            runs[idx++] = start;
-            runs[idx++] = len - 1;
-        }
-    }
-    return idx;
+    free(stack.data);
+    return (Rect){x0,y0,x1,y1};
 }
 
-int main(int argc, char **argv)
-{
-    if (argc < 2) { printf("Usage: %s grid.png\n", argv[0]); return 1; }
+int area(Rect r){ return (r.x1-r.x0+1)*(r.y1-r.y0+1); }
+
+void save_subimage(unsigned char* img, int w, int h, Rect r, const char* filename){
+    if (r.x1 < r.x0 || r.y1 < r.y0) return;
+    int new_w = r.x1 - r.x0 + 1;
+    int new_h = r.y1 - r.y0 + 1;
+    unsigned char* crop = malloc(new_w * new_h * 4);
+    if (!crop) return;
+    for(int y=0;y<new_h;y++) {
+        for(int x=0;x<new_w;x++) {
+            int src = ((r.y0 + y) * w + (r.x0 + x)) * 4;
+            int dst = (y * new_w + x) * 4;
+            memcpy(&crop[dst], &img[src], 4);
+        }
+    }
+    stbi_write_png(filename, new_w, new_h, 4, crop, new_w * 4);
+    free(crop);
+}
+
+int compare_reading_order(const void* a, const void* b) {
+    Rect* r1 = (Rect*)a;
+    Rect* r2 = (Rect*)b;
+    int cy1 = (r1->y0 + r1->y1) / 2;
+    int cy2 = (r2->y0 + r2->y1) / 2;
+    int h = r1->y1 - r1->y0;
+    if (abs(cy1 - cy2) < (h / 2)) return r1->x0 - r2->x0;
+    return r1->y0 - r2->y0;
+}
+
+int main(int argc, char **argv) {
+    if (argc < 2) return 1;
+
+    #ifdef _WIN32
+        system("mkdir letters");
+    #else
+        mkdir("letters", 0777);
+    #endif
 
     int w, h, c;
-    unsigned char *img = stbi_load(argv[1], &w, &h, &c, 1);
-    if (!img) { printf("Error: cannot load %s\n", argv[1]); return 1; }
+    unsigned char *img = stbi_load(argv[1], &w, &h, &c, 4);
+    if (!img) return 1;
 
-    // projections
-    int *proj_x = calloc(w, sizeof(int));
-    int *proj_y = calloc(h, sizeof(int));
-    if (!proj_x || !proj_y) { printf("Memory error\n"); return 1; }
+    int* visited = calloc(w * h, sizeof(int));
+    Rect letters[5000];
+    int count = 0;
 
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++) {
-            if (img[y * w + x] < 128) { proj_x[x]++; proj_y[y]++; }
+            if (!visited[y * w + x] && is_black(img, w, h, x, y)) {
+                if (count >= 5000) break;
+                Rect r = flood_fill(img, w, h, visited, x, y);
+                if (area(r) > 15) letters[count++] = r;
+            }
         }
     }
 
-    // thresholds for detecting grid lines: adapt to image
-    int max_px = 0, max_py = 0;
-    for (int i = 0; i < w; i++) if (proj_x[i] > max_px) max_px = proj_x[i];
-    for (int i = 0; i < h; i++) if (proj_y[i] > max_py) max_py = proj_y[i];
-
-    // choose a threshold that catches the grid lines (which span almost full image)
-    int thr_x = (int)(0.6 * (double)h);
-    if ((int)(0.6 * (double)max_px) > thr_x) thr_x = (int)(0.6 * (double)max_px);
-
-    int thr_y = (int)(0.6 * (double)w);
-    if ((int)(0.6 * (double)max_py) > thr_y) thr_y = (int)(0.6 * (double)max_py);
-
-    // arrays to store runs
-    int *runs_x = malloc(sizeof(int) * w * 2);
-    int *runs_y = malloc(sizeof(int) * h * 2);
-    int cnt_x = detect_runs(proj_x, w, thr_x, runs_x, w*2);
-    int cnt_y = detect_runs(proj_y, h, thr_y, runs_y, h*2);
-
-    int num_lines_x = cnt_x / 2;
-    int num_lines_y = cnt_y / 2;
-
-    printf("detected vertical runs: %d  horizontal runs: %d  (thr_x=%d thr_y=%d)\n",
-           num_lines_x, num_lines_y, thr_x, thr_y);
-
-    // If we have enough runs (>=2) in both directions, we assume grid has drawn lines
-    if (num_lines_x >= 2 && num_lines_y >= 2) {
-        // compute centers of runs
-        int *centers_x = malloc(sizeof(int) * num_lines_x);
-        int *centers_y = malloc(sizeof(int) * num_lines_y);
-        for (int i = 0; i < num_lines_x; i++) {
-            int s = runs_x[2*i], e = runs_x[2*i+1];
-            centers_x[i] = (s + e) / 2;
-        }
-        for (int i = 0; i < num_lines_y; i++) {
-            int s = runs_y[2*i], e = runs_y[2*i+1];
-            centers_y[i] = (s + e) / 2;
-        }
-
-        // number of cells = lines - 1
-        int cols = num_lines_x - 1;
-        int rows = num_lines_y - 1;
-        if (cols <= 0 || rows <= 0) {
-            printf("Not enough grid lines to form cells\n");
-        } else {
-            printf("Grid lines detected -> %d rows x %d cols\n", rows, cols);
-            system("mkdir -p letters");
-            int idx = 0;
-            for (int r = 0; r < rows; r++) {
-                for (int cidx = 0; cidx < cols; cidx++) {
-                    int x0 = centers_x[cidx] + 1;
-                    int x1 = centers_x[cidx+1] - 1;
-                    int y0 = centers_y[r] + 1;
-                    int y1 = centers_y[r+1] - 1;
-                    // sanity clamp
-                    if (x0 < 0) x0 = 0;
-                    if (y0 < 0) y0 = 0;
-                    if (x1 >= w) x1 = w-1;
-                    if (y1 >= h) y1 = h-1;
-                    char name[256];
-                    sprintf(name, "letters/letter_%02d_%02d.png", r, cidx);
-                    save_subimage(img, w, h, x0, y0, x1, y1, name);
-                    idx++;
-                }
-            }
-            printf("%d letters saved into folder letters/\n", idx);
-        }
-        free(centers_x);
-        free(centers_y);
-    } else {
-        // fallback: try the previous projection-based zone detection (less reliable if no lines)
-        printf("Fallback: no strong grid lines detected, trying projection-based splitting\n");
-        // detect continuous areas in proj arrays (same logic but using MIN_RUN)
-        int MIN_RUN = 2;
-        int *zones_x = malloc(sizeof(int) * w * 2);
-        int *zones_y = malloc(sizeof(int) * h * 2);
-        int count_x = 0, count_y = 0;
-        // detect_x
-        {
-            int in_zone = 0, idx = 0;
-            for (int i = 0; i < w; i++) {
-                if (proj_x[i] > MIN_RUN && !in_zone) { in_zone = 1; zones_x[idx++] = i; }
-                else if (proj_x[i] <= MIN_RUN && in_zone) { in_zone = 0; zones_x[idx++] = i-1; }
-            }
-            if (in_zone) zones_x[idx++] = w-1;
-            count_x = idx;
-        }
-        // detect_y
-        {
-            int in_zone = 0, idx = 0;
-            for (int i = 0; i < h; i++) {
-                if (proj_y[i] > MIN_RUN && !in_zone) { in_zone = 1; zones_y[idx++] = i; }
-                else if (proj_y[i] <= MIN_RUN && in_zone) { in_zone = 0; zones_y[idx++] = i-1; }
-            }
-            if (in_zone) zones_y[idx++] = h-1;
-            count_y = idx;
-        }
-        if (count_x >= 4 && count_y >= 4) {
-            int cols = count_x/2;
-            int rows = count_y/2;
-            printf("Projection fallback: rows=%d cols=%d\n", rows, cols);
-            system("mkdir -p letters");
-            int idx = 0;
-            for (int r = 0; r < count_y; r += 2) {
-                for (int cidx = 0; cidx < count_x; cidx += 2) {
-                    int x0 = zones_x[cidx];
-                    int x1 = zones_x[cidx+1];
-                    int y0 = zones_y[r];
-                    int y1 = zones_y[r+1];
-                    // shrink a bit to avoid grid lines
-                    x0 += 1; y0 += 1; if (x1 < w) x1 -= 1; if (y1 < h) y1 -= 1;
-                    char name[256];
-                    sprintf(name, "letters/letter_%02d_%02d.png", r/2, cidx/2);
-                    save_subimage(img, w, h, x0, y0, x1, y1, name);
-                    idx++;
-                }
-            }
-            printf("%d letters saved into folder letters/ (fallback)\n", idx);
-        } else {
-            printf("Fallback also failed: cannot find a regular grid.\n");
-        }
-        free(zones_x);
-        free(zones_y);
+    if (count == 0) {
+        stbi_image_free(img);
+        free(visited);
+        return 0;
     }
 
-    free(runs_x);
-    free(runs_y);
-    free(proj_x);
-    free(proj_y);
+    qsort(letters, count, sizeof(Rect), compare_reading_order);
+
+    int row = 0;
+    int col = 0;
+    int current_line_y = letters[0].y0;
+
+    for (int i = 0; i < count; i++) {
+        int h_letter = letters[i].y1 - letters[i].y0;
+        if (letters[i].y0 > current_line_y + (h_letter / 2)) {
+            row++;
+            col = 0;
+            current_line_y = letters[i].y0;
+        }
+        char out_name[512];
+        sprintf(out_name, "letters/letter_%02d_%02d.png", row, col);
+        save_subimage(img, w, h, letters[i], out_name);
+        col++;
+    }
+
     stbi_image_free(img);
+    free(visited);
     return 0;
 }
-

@@ -9,7 +9,6 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-
 typedef struct { int x0,y0,x1,y1; } Rect;
 typedef struct { int x,y; } Point;
 
@@ -24,17 +23,37 @@ void push(Stack* s, Point p){
 }
 Point pop(Stack* s){ return s->data[--s->size]; }
 
-// Vérifie si un pixel est noir
-int is_black(unsigned char* img,int w,int h,int channels,int x,int y){
-    if(x<0||x>=w||y<0||y>=h) return 0;
-    unsigned char r = img[(y*w+x)*channels+0];
-    unsigned char g = img[(y*w+x)*channels+1];
-    unsigned char b = img[(y*w+x)*channels+2];
-    return (r<150 && g<150 && b<150);
+// Fonction de tri pour les mots (Haut -> Bas)
+int compare_rect_y(const void* a, const void* b) {
+    return ((Rect*)a)->y0 - ((Rect*)b)->y0;
+}
+
+// Fonction de tri pour les lettres (Gauche -> Droite)
+int compare_rect_x(const void* a, const void* b) {
+    return ((Rect*)a)->x0 - ((Rect*)b)->x0;
+}
+
+// Vérifie si un pixel est noir ET opaque
+// MODIFICATION PNG : On gère maintenant 4 canaux (RGBA)
+int is_black(unsigned char* img, int w, int h, int x, int y){
+    if(x<0 || x>=w || y<0 || y>=h) return 0;
+    
+    // Accès pixel avec 4 canaux
+    unsigned char* p = img + (y * w + x) * 4; 
+    unsigned char r = p[0];
+    unsigned char g = p[1];
+    unsigned char b = p[2];
+    unsigned char a = p[3]; // Canal Alpha (Transparence)
+
+    // Si le pixel est transparent (ou presque), ce n'est pas du noir
+    if (a < 100) return 0;
+
+    // Si le pixel est opaque, on vérifie s'il est sombre
+    return (r < 150 && g < 150 && b < 150);
 }
 
 // Flood-fill pour récupérer une zone (8-directions)
-Rect flood_fill(unsigned char* img,int w,int h,int channels,int* visited,int start_x,int start_y){
+Rect flood_fill(unsigned char* img, int w, int h, int* visited, int start_x, int start_y){
     Stack stack; stack.data=malloc(1024*sizeof(Point)); stack.size=0; stack.capacity=1024;
     push(&stack,(Point){start_x,start_y}); visited[start_y*w+start_x]=1;
     int x0=start_x,y0=start_y,x1=start_x,y1=start_y;
@@ -46,7 +65,8 @@ Rect flood_fill(unsigned char* img,int w,int h,int channels,int* visited,int sta
         
         for(int i=0;i<8;i++){
             int nx=p.x+dx[i], ny=p.y+dy[i];
-            if(nx>=0 && nx<w && ny>=0 && ny<h && !visited[ny*w+nx] && is_black(img,w,h,channels,nx,ny)){
+            // On appelle is_black sans l'argument channels car fixé à 4
+            if(nx>=0 && nx<w && ny>=0 && ny<h && !visited[ny*w+nx] && is_black(img,w,h,nx,ny)){
                 push(&stack,(Point){nx,ny});
                 visited[ny*w+nx]=1;
                 if(nx<x0)x0=nx; if(ny<y0)y0=ny;
@@ -61,26 +81,35 @@ Rect flood_fill(unsigned char* img,int w,int h,int channels,int* visited,int sta
 // Calcul surface
 int area(Rect r){ return (r.x1-r.x0+1)*(r.y1-r.y0+1); }
 
-// Sauvegarde rectangle
-void save_rect(unsigned char* img,int w,int h,int channels,Rect r,const char* filename){
-    if (r.x1 < r.x0 || r.y1 < r.y0) {
-        printf("Avertissement: Tentative de sauvegarde d'un rectangle invalide pour %s\n", filename);
-        return;
-    }
+// Sauvegarde rectangle en PNG
+void save_rect(unsigned char* img, int w, int h, Rect r, const char* filename){
+    if (r.x1 < r.x0 || r.y1 < r.y0) return;
+    
     int new_w = r.x1 - r.x0 + 1;
     int new_h = r.y1 - r.y0 + 1;
-    unsigned char* crop = malloc(new_w*new_h*channels);
+    int channels = 4; // Force 4 canaux pour PNG
+
+    unsigned char* crop = malloc(new_w * new_h * channels);
     if (!crop) { printf("Erreur malloc pour crop\n"); return; }
 
-    for(int y=0;y<new_h;y++)
-        for(int x=0;x<new_w;x++)
-            for(int c=0;c<channels;c++)
-                crop[(y*new_w+x)*channels+c] = img[((r.y0+y)*w+(r.x0+x))*channels+c];
-    stbi_write_png(filename,new_w,new_h,channels,crop,new_w*channels);
+    for(int y=0;y<new_h;y++) {
+        for(int x=0;x<new_w;x++) {
+            // Copie des 4 canaux (RGBA)
+            int src_idx = ((r.y0 + y) * w + (r.x0 + x)) * channels;
+            int dst_idx = (y * new_w + x) * channels;
+            
+            crop[dst_idx + 0] = img[src_idx + 0]; // R
+            crop[dst_idx + 1] = img[src_idx + 1]; // G
+            crop[dst_idx + 2] = img[src_idx + 2]; // B
+            crop[dst_idx + 3] = img[src_idx + 3]; // A
+        }
+    }
+    
+    // Sauvegarde en PNG (gère la transparence)
+    stbi_write_png(filename, new_w, new_h, channels, crop, new_w * channels);
     free(crop);
 }
 
-// Retourne l'union de deux rectangles
 Rect rect_union(Rect r1, Rect r2) {
     Rect r;
     r.x0 = (r1.x0 < r2.x0) ? r1.x0 : r2.x0;
@@ -90,20 +119,16 @@ Rect rect_union(Rect r1, Rect r2) {
     return r;
 }
 
-
 int should_merge_as_word(Rect r1, Rect r2, double avg_h) {
-    // 1. Calculer l'écart horizontal
     int h_gap = 0;
     if (r2.x0 > r1.x1) h_gap = r2.x0 - r1.x1;
     else if (r1.x0 > r2.x1) h_gap = r1.x0 - r2.x1;
-    else h_gap = 0; // Chevauchement
+    else h_gap = 0; 
 
-    // 2. Calculer le chevauchement vertical
     int overlap_y1 = (r1.y1 < r2.y1) ? r1.y1 : r2.y1;
     int overlap_y0 = (r1.y0 > r2.y0) ? r1.y0 : r2.y0;
     int v_overlap = overlap_y1 - overlap_y0;
 
-    // --- RÈGLES DE FUSION ---
     int horizontal_threshold = (int)(avg_h * 1.5); 
     int vertical_threshold = (int)(avg_h * 0.25); 
 
@@ -113,28 +138,45 @@ int should_merge_as_word(Rect r1, Rect r2, double avg_h) {
     return (is_horizontally_close && is_vertically_aligned);
 }
 
-
+// Vérifie si une lettre est contenue (géométriquement) dans le mot
+int is_letter_in_word(Rect letter, Rect word) {
+    int cx = (letter.x0 + letter.x1) / 2;
+    int cy = (letter.y0 + letter.y1) / 2;
+    return (cx >= word.x0 && cx <= word.x1 && cy >= word.y0 && cy <= word.y1);
+}
 
 int main(int argc,char** argv){
     if(argc<2){ printf("Usage: %s image_liste_mots.png\n",argv[0]); return 1;}
 
-    mkdir("words", 0777);
+    // Création des dossiers
+    #ifdef _WIN32
+        system("mkdir words");
+        system("mkdir words_letters");
+    #else
+        mkdir("words", 0777);
+        mkdir("words_letters", 0777);
+    #endif
 
-    int w,h,channels;
-    unsigned char* img = stbi_load(argv[1],&w,&h,&channels,3);
+    int w,h,channels_in_file;
+    // MODIFICATION PNG : On FORCE le chargement en 4 canaux (RGBA)
+    // Cela permet à stbi de mettre Alpha à 255 si l'image n'a pas de transparence,
+    // ou de lire la transparence si elle existe.
+    unsigned char* img = stbi_load(argv[1], &w, &h, &channels_in_file, 4);
+    
     if(!img){ printf("Impossible de charger %s\n",argv[1]); return 1;}
+    
     int* visited = calloc(w*h,sizeof(int));
-
     Rect zones[10000]; int n_zones=0;
     double total_height = 0;
 
     // --- ETAPE 1: Détecter tous les blobs (lettres) ---
     printf("Etape 1: Détection des blobs (lettres)...\n");
     for(int y=0;y<h;y++) for(int x=0;x<w;x++) {
-        if(!visited[y*w+x] && is_black(img,w,h,channels,x,y)) {
+        // is_black gère maintenant l'Alpha
+        if(!visited[y*w+x] && is_black(img,w,h,x,y)) {
             if (n_zones >= 10000) break;
-            Rect r = flood_fill(img,w,h,channels,visited,x,y);
-            if (area(r) > 20) { 
+            Rect r = flood_fill(img,w,h,visited,x,y);
+            if (area(r) > 10) { 
                 zones[n_zones++] = r;
                 total_height += (r.y1 - r.y0 + 1);
             }
@@ -172,24 +214,48 @@ int main(int argc,char** argv){
     printf("... %d mots fusionnés obtenus.\n", n_merged);
     free(zone_merged);
 
-    // --- ETAPE 3: Sauvegarder chaque mot ---
-    printf("Etape 3: Sauvegarde des mots dans le dossier 'words/'...\n");
+    // --- ETAPE 2 BIS: Trier les mots de haut en bas ---
+    qsort(merged_zones, n_merged, sizeof(Rect), compare_rect_y);
+
+    // --- ETAPE 3: Sauvegarder chaque mot ET ses lettres ---
+    printf("Etape 3: Sauvegarde et découpage secondaire...\n");
     int saved_count = 0;
     for(int i=0; i<n_merged; i++) {
         if (area(merged_zones[i]) < (avg_h * avg_h * 0.5)) {
              continue;
         }
 
+        // 1. Sauvegarde du MOT entier (format .png)
         char filename[100];
-        sprintf(filename, "words/word_%03d.png", saved_count + 1);
-        
-        save_rect(img, w, h, channels, merged_zones[i], filename);
+        sprintf(filename, "words/word_%03d.png", saved_count);
+        save_rect(img, w, h, merged_zones[i], filename);
+
+        // 2. Retrouver les lettres contenues dans ce mot
+        Rect word_letters[100]; 
+        int n_wl = 0;
+
+        for(int k=0; k<n_zones; k++) {
+            if(is_letter_in_word(zones[k], merged_zones[i])) {
+                if(n_wl < 100) word_letters[n_wl++] = zones[k];
+            }
+        }
+
+        // 3. Trier les lettres de gauche à droite
+        qsort(word_letters, n_wl, sizeof(Rect), compare_rect_x);
+
+        // 4. Sauvegarder les lettres individuelles
+        for(int l=0; l<n_wl; l++) {
+            char l_filename[100];
+            // Format: word_ID_lettre_ID.png
+            sprintf(l_filename, "words_letters/word_%03d_let_%02d.png", saved_count, l);
+            save_rect(img, w, h, word_letters[l], l_filename);
+        }
+
         saved_count++;
     }
-    printf("... %d mots sauvegardés.\n", saved_count);
+    printf("... %d mots sauvegardés et découpés dans 'words_letters/'.\n", saved_count);
 
     stbi_image_free(img);
     free(visited);
     return 0;
 }
-
