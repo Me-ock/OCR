@@ -64,16 +64,42 @@ void forward_pass(NeuralNetwork *nn, float *inputs) {
         nn->output[o] = sigmoid(sum); // ✅ enregistre directement dans le réseau
     }
 }
-
 int validate(NeuralNetwork *nn, float **test_inputs, float **test_targets, int sample_count) {
     int correct = 0;
     for (int s = 0; s < sample_count; s++) {
         forward_pass(nn, test_inputs[s]);
-        // Pas de vraie classification ici, juste un placeholder
-        correct++;
+
+        // Trouver l'indice de la sortie prédite (le neurone avec le score le plus élevé)
+        int predicted_index = 0;
+        float max_output = nn->output[0];
+
+        for (int i = 1; i < nn->output_size; i++) {
+            if (nn->output[i] > max_output) {
+                max_output = nn->output[i];
+                predicted_index = i;
+            }
+        }
+
+        // Trouver l'indice de la sortie attendue (le label cible)
+        int target_index = 0;
+        for (int i = 0; i < nn->output_size; i++) {
+            if (test_targets[s][i] == 1.0f) { // Les cibles sont codées en One-Hot (0.0 ou 1.0)
+                target_index = i;
+                break;
+            }
+        }
+
+        // Comparaison
+        if (predicted_index == target_index) {
+            correct++;
+        }
     }
     return correct;
 }
+
+
+
+
 void train_epoch(NeuralNetwork *nn, float **train_inputs, float **train_targets, int sample_count, float lr) {
     float total_loss = 0.0f;
 
